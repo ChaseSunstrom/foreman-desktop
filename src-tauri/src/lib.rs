@@ -108,7 +108,7 @@ fn ssh_opts() -> Vec<String> {
 /// The fm commands the app runs; anything else is refused before it reaches a device (defence in depth: the
 /// page has no remote content, but a webview bug must not turn into `fm trust on` or `fm uninstall-user`).
 const ALLOWED: &[&str] = &["projects", "ui", "session", "capture", "focus", "drive", "autonomy", "agents", "claude",
-    "serve", "state", "queue", "next", "task", "decide"];
+    "serve", "state", "queue", "next", "task", "decide", "doctor"];
 const ALLOWED_TASK: &[&str] = &["drop", "set", "show", "log"];
 
 pub fn allowed(args: &[String]) -> Result<(), String> {
@@ -121,7 +121,9 @@ pub fn allowed(args: &[String]) -> Result<(), String> {
         && (cmd != "task" || args.get(i + 1).is_some_and(|a| ALLOWED_TASK.contains(&a.as_str())))
         && (cmd != "serve" || args.get(i + 1).is_some_and(|a| ["status", "start", "stop"].contains(&a.as_str())))
         // decide only lists (the Decisions tab): recording one is the agent's, never a click's
-        && (cmd != "decide" || args[i + 1..].iter().any(|a| a == "--list" || a == "--review"));
+        && (cmd != "decide" || args[i + 1..].iter().any(|a| a == "--list" || a == "--review"))
+        // doctor only reports (no --repair, --restore-state or --full)
+        && (cmd != "doctor" || args[i + 1..].iter().all(|a| a == "--json"));
     if ok { Ok(()) } else { Err(format!("the app doesn't run `fm {}`", args[i.min(args.len())..].join(" "))) }
 }
 
@@ -156,8 +158,10 @@ async fn fm(device: Device, args: Vec<String>) -> Result<String, String> {
         .await
         .map_err(|_| "timed out after 120 s".to_string())?
         .map_err(|e| format!("can't run fm: {e}"))?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    // a command that answered in JSON keeps its answer whatever its exit code (fm doctor exits 1 on a failing check)
+    if out.status.success() || stdout.trim_start().starts_with('{') {
+        Ok(stdout)
     } else {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         Err(if err.is_empty() { format!("fm exited {}", out.status.code().unwrap_or(-1)) } else { err })
@@ -472,11 +476,13 @@ mod tests {
     #[test]
     fn only_the_apps_own_commands_run() {
         for ok in [&["projects", "--json"][..], &["-p", "app", "ui", "--json", "--follow"], &["-p", "a", "task", "drop", "T-1", "x"],
-                   &["session", "send", "id", "--", "hi"], &["serve", "status"], &["-p", "a", "decide", "--list", "--json"]] {
+                   &["session", "send", "id", "--", "hi"], &["serve", "status"], &["-p", "a", "decide", "--list", "--json"],
+                   &["doctor", "--json"]] {
             assert!(allowed(&args(ok)).is_ok(), "{ok:?}");
         }
         for bad in [&["trust", "on"][..], &["uninstall-user"], &["doctor", "--repair"], &["-p", "a", "task", "done", "T-1"],
-                    &["serve"], &["-p"], &[], &["run"], &["--json", "projects"], &["decide", "skip the tests", "--why", "x"]] {
+                    &["serve"], &["-p"], &[], &["run"], &["--json", "projects"], &["decide", "skip the tests", "--why", "x"],
+                    &["doctor", "--repair"], &["doctor", "--json", "--restore-state"]] {
             assert!(allowed(&args(bad)).is_err(), "{bad:?}");
         }
     }

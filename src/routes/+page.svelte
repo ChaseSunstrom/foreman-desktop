@@ -9,6 +9,7 @@
   import Agents from "$lib/ui/Agents.svelte";
   import Devices from "$lib/ui/Devices.svelte";
   import NewSession from "$lib/ui/NewSession.svelte";
+  import Capture from "$lib/ui/Capture.svelte";
   import Palette from "$lib/ui/Palette.svelte";
   import Toasts from "$lib/ui/Toasts.svelte";
 
@@ -17,7 +18,8 @@
 
   function keys(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === "k") (e.preventDefault(), (app.palette = !app.palette));
+    if (mod && e.shiftKey && e.key.toLowerCase() === "c") (e.preventDefault(), (app.capture = true));
+    else if (mod && e.key.toLowerCase() === "k") (e.preventDefault(), (app.palette = !app.palette));
     else if (mod && e.key.toLowerCase() === "n") (e.preventDefault(), (app.newSession = {}));
   }
 </script>
@@ -49,6 +51,7 @@
 
 {#if app.newSession}<NewSession device={app.newSession.device} cwd={app.newSession.cwd} />{/if}
 {#if app.palette}<Palette />{/if}
+{#if app.capture}<Capture />{/if}
 <Toasts />
 
 <style>

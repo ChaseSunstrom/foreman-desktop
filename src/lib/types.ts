@@ -46,6 +46,9 @@ export type ProjectView = {
   typical?: Record<string, number>;
 };
 /** This device's plan usage (fm projects --json, T-0346): percents, and the share of the week gone by (0–1). */
+/** fm doctor --json (T-0347): this device's Foreman health. */
+export type Health = { ok: boolean; results: { name: string; status: "PASS" | "WARN" | "FAIL"; detail: string }[] };
+
 export type Usage = { five_hour?: number; seven_day?: number; week_gone?: number };
 
 export type ProjectRow = {

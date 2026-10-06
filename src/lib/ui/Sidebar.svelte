@@ -55,6 +55,7 @@
         <span class="caret" class:open={!closed[d.id]}><Icon name="chevron" size={11} stroke={2.2} /></span>
         <Bits kind="dot" status={st.status} />
         <span class="ellipsis">{d.name}</span>
+        {#if st.health && !st.health.ok}<span class="count bad" title="fm doctor: {st.health.results.filter((r) => r.status === 'FAIL').map((r) => r.name).join(', ')} failing">!</span>{/if}
         <span class="t3 n">{st.projects.length || ""}</span>
       </button>
       {#if !closed[d.id]}
@@ -194,6 +195,10 @@
   .count.warn {
     color: var(--warn);
     background: rgba(217, 164, 65, 0.12);
+  }
+  .count.bad {
+    color: var(--bad);
+    background: color-mix(in srgb, var(--bad) 14%, transparent);
   }
   .head {
     padding: 0 8px 6px;

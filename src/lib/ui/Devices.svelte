@@ -77,6 +77,17 @@
           <button class="btn icon ghost" title="Reconnect" onclick={() => app.connect(d)}><Icon name="refresh" size={13} /></button>
           {#if d.id !== "local"}<button class="btn icon ghost" title="Remove" onclick={() => app.removeDevice(d.id)}><Icon name="trash" size={13} /></button>{/if}
         </div>
+        {#if st.health}
+          {@const bad = st.health.results.filter((r) => r.status !== "PASS")}
+          <div class="health">
+            <span class={st.health.ok ? "okc" : "badc"}><Icon name={st.health.ok ? "check" : "x"} size={11} stroke={2.6} /></span>
+            <span class="small">{st.health.ok ? "Foreman is healthy" : "Foreman has a problem"} · {st.health.results.length - bad.length} of {st.health.results.length} checks pass</span>
+            <button class="btn ghost small" onclick={() => app.checkHealth(d)}>Check again</button>
+          </div>
+          {#each bad as r}
+            <div class="hrow small"><span class={r.status === "FAIL" ? "bad" : "warn"}>{r.status.toLowerCase()}</span><span class="strong">{r.name}</span><span class="t3 ellipsis" title={r.detail}>{r.detail}</span></div>
+          {/each}
+        {/if}
       {/each}
     </section>
 
@@ -200,5 +211,42 @@
   }
   .peer.off {
     opacity: 0.6;
+  }
+  .health {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px 10px 40px;
+  }
+  .hrow {
+    display: grid;
+    grid-template-columns: 40px 140px minmax(0, 1fr);
+    gap: 8px;
+    padding: 2px 16px 2px 40px;
+  }
+  .hrow:last-of-type {
+    padding-bottom: 10px;
+  }
+  .okc,
+  .badc {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-grid;
+    place-items: center;
+  }
+  .okc {
+    color: var(--ok);
+    background: rgba(79, 174, 126, 0.12);
+  }
+  .badc,
+  .bad {
+    color: var(--bad);
+  }
+  .badc {
+    background: rgba(229, 83, 75, 0.12);
+  }
+  .warn {
+    color: var(--warn);
   }
 </style>

@@ -13,7 +13,8 @@ A desktop app for [Foreman](https://github.com/ChaseSunstrom/foreman): every pro
 - **Remote control**: the `claude remote-control` units on each device (`fm serve`). Serve a project, stop a unit, or see why one died.
 - **Agents** and **Devices**: which agents each device has, whether Foreman's guard, MCP server and rules are wired into them (`fm agents`, with Wire in and Remove), your tailnet's machines, and an explicit fingerprint check before any device is trusted.
 - **Usage**: each device's 5-hour and weekly plan usage in the sidebar, with an even-pace mark for the week. A bar turns amber when usage runs ahead of pace, which is the point where Foreman holds subagents back.
-- **Ctrl+K** jumps to any project, session, page or action; **Ctrl+N** starts a session.
+- **Health**: each device's `fm doctor` result. A mark in the sidebar shows when a check fails, and the Devices page lists every check that doesn't pass, with Check again.
+- **Ctrl+K** jumps to any project, session, page or action; **Ctrl+N** starts a session; **Ctrl+Shift+C** captures an idea, a bug or a request into any project's inbox, with its kind and size.
 
 ## How it works
 
@@ -43,6 +44,6 @@ cd src-tauri && cargo test                # the transport: quoting, host checks,
 Optional environment variables:
 
 - `FOREMAN_HOME`: where Foreman lives, if not `~/.claude/foreman`.
-- `FOREMAN_DESKTOP_VIEW=sessions|remote|agents|devices|new|palette|project:<slug>[:tab]|session:<id>|claude:<id>`: the page to open first.
+- `FOREMAN_DESKTOP_VIEW=sessions|remote|agents|devices|new|palette|capture|project:<slug>[:tab]|session:<id>|claude:<id>`: the page to open first.
 
 On Wayland with NVIDIA, the app sets `__NV_DISABLE_EXPLICIT_SYNC=1` itself, which is the fix Tauri recommends for WebKitGTK's "Error 71".

@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { fm, live, type Device, type Stream } from "./fm";
-import type { AgentRow, ClaudeSession, ProjectRow, SessionItem, SessionRow, Usage } from "./types";
+import type { AgentRow, ClaudeSession, Health, ProjectRow, SessionItem, SessionRow, Usage } from "./types";
 
 export type View =
   | { kind: "home" }
@@ -21,13 +21,14 @@ export type DeviceState = {
   claude: ClaudeSession[];
   agents: AgentRow[];
   usage: Usage;
+  health: Health | null; // fm doctor, once per connect (it takes seconds) and on request
 };
 
 type Toast = { id: number; kind: "ok" | "bad" | "info"; text: string; action?: { label: string; run: () => void } };
 
 const KEY = "foreman.devices.v1";
 const LOCAL: Device = { id: "local", name: "This device", host: null };
-const empty = (): DeviceState => ({ status: "connecting", projects: [], sessions: [], claude: [], agents: [], usage: {} });
+const empty = (): DeviceState => ({ status: "connecting", projects: [], sessions: [], claude: [], agents: [], usage: {}, health: null });
 
 function load(): Device[] {
   try {
@@ -44,6 +45,7 @@ class App {
   toasts = $state<Toast[]>([]);
   newSession = $state<null | { device?: string; cwd?: string }>(null);
   palette = $state(false);
+  capture = $state(false);
   private streams = new Map<string, Stream[]>();
   private seq = 0;
 
@@ -60,7 +62,7 @@ class App {
       .catch(() => {});
   }
 
-  /** FOREMAN_DESKTOP_VIEW: sessions|remote|agents|devices|new|palette|project:<slug>[:tab]|session:<id>|claude:<id> */
+  /** FOREMAN_DESKTOP_VIEW: sessions|remote|agents|devices|new|palette|capture|project:<slug>[:tab]|session:<id>|claude:<id> */
   open(v: string) {
     const [kind, a, b] = v.split(":");
     if (kind === "project" && a) this.view = { kind: "project", device: "local", slug: a, tab: b };
@@ -69,6 +71,7 @@ class App {
     else if (["home", "sessions", "remote", "agents", "devices"].includes(kind)) this.view = { kind } as View;
     else if (kind === "new") this.newSession = {};
     else if (kind === "palette") this.palette = true;
+    else if (kind === "capture") this.capture = true;
   }
 
   device(id: string) {
@@ -108,6 +111,15 @@ class App {
     ]);
     fm<{ agents: AgentRow[] }>(d, ["session", "agents", "--json"])
       .then((o) => put("agents", o.agents))
+      .catch(() => {});
+    this.checkHealth(d);
+  }
+
+  checkHealth(d: Device) {
+    fm<Health>(d, ["doctor", "--json"])
+      .then((h) => {
+        if (this.state[d.id] && h && typeof h === "object") this.state[d.id].health = h;
+      })
       .catch(() => {});
   }
 

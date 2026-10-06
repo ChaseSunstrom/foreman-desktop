@@ -16,6 +16,7 @@
   const all = $derived.by((): Hit[] => {
     const hits: Hit[] = [
       { group: "Actions", label: "New session", hint: "Ctrl N", icon: "plus", run: () => (app.newSession = {}) },
+      { group: "Actions", label: "Capture an idea or a bug", hint: "Ctrl Shift C", icon: "plus", run: () => (app.capture = true) },
       { group: "Pages", label: "Home", hint: "", icon: "home", run: go({ kind: "home" }) },
       { group: "Pages", label: "Sessions", hint: "", icon: "message", run: go({ kind: "sessions" }) },
       { group: "Pages", label: "Remote control", hint: "", icon: "radio", run: go({ kind: "remote" }) },
