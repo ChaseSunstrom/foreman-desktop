@@ -12,6 +12,7 @@ A desktop app for [Foreman](https://github.com/ChaseSunstrom/foreman): every pro
   Message any session: Foreman sessions take the next turn; a Claude session is continued headlessly by its own id, as a fork while its terminal is still open.
 - **Remote control**: the `claude remote-control` units on each device (`fm serve`). Serve a project, stop a unit, or see why one died.
 - **Agents** and **Devices**: which agents each device has, whether Foreman's guard, MCP server and rules are wired into them (`fm agents`, with Wire in and Remove), your tailnet's machines, and an explicit fingerprint check before any device is trusted.
+- **Usage**: each device's 5-hour and weekly plan usage in the sidebar, with an even-pace mark for the week. A bar turns amber when usage runs ahead of pace, which is the point where Foreman holds subagents back.
 - **Ctrl+K** jumps to any project, session, page or action; **Ctrl+N** starts a session.
 
 ## How it works

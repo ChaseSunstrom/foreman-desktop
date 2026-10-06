@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { fm, live, type Device, type Stream } from "./fm";
-import type { AgentRow, ClaudeSession, ProjectRow, SessionItem, SessionRow } from "./types";
+import type { AgentRow, ClaudeSession, ProjectRow, SessionItem, SessionRow, Usage } from "./types";
 
 export type View =
   | { kind: "home" }
@@ -20,13 +20,14 @@ export type DeviceState = {
   sessions: SessionRow[];
   claude: ClaudeSession[];
   agents: AgentRow[];
+  usage: Usage;
 };
 
 type Toast = { id: number; kind: "ok" | "bad" | "info"; text: string; action?: { label: string; run: () => void } };
 
 const KEY = "foreman.devices.v1";
 const LOCAL: Device = { id: "local", name: "This device", host: null };
-const empty = (): DeviceState => ({ status: "connecting", projects: [], sessions: [], claude: [], agents: [] });
+const empty = (): DeviceState => ({ status: "connecting", projects: [], sessions: [], claude: [], agents: [], usage: {} });
 
 function load(): Device[] {
   try {
@@ -98,7 +99,10 @@ class App {
       if (this.state[d.id]) this.state[d.id][k] = v;
     };
     this.streams.set(d.id, [
-      live(d, ["projects", "--json", "--follow"], (o) => put("projects", o.projects ?? []), set("projects")),
+      live(d, ["projects", "--json", "--follow"], (o) => {
+        put("projects", o.projects ?? []);
+        put("usage", o.usage ?? {});
+      }, set("projects")),
       live(d, ["session", "list", "--json", "--follow"], (o) => this.sessionsChanged(d, o.sessions ?? []), set("sessions")),
       live(d, ["claude", "list", "--all", "--limit", "400", "--json", "--follow"], (o) => put("claude", o.sessions ?? []), set("claude")),
     ]);

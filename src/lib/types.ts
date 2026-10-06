@@ -45,6 +45,9 @@ export type ProjectView = {
   budget?: { today_usd: number; subagent_tokens: number; subagents_paused?: string | null } | null;
   typical?: Record<string, number>;
 };
+/** This device's plan usage (fm projects --json, T-0346): percents, and the share of the week gone by (0–1). */
+export type Usage = { five_hour?: number; seven_day?: number; week_gone?: number };
+
 export type ProjectRow = {
   project: string;
   root: string;

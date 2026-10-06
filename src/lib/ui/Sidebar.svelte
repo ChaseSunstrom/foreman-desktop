@@ -1,7 +1,7 @@
 <script lang="ts">
   import { slide } from "svelte/transition";
   import { app, type View } from "$lib/app.svelte";
-  import { base } from "$lib/types";
+  import { base, type Usage } from "$lib/types";
   import Icon from "./Icon.svelte";
   import Bits from "./Bits.svelte";
   import Logo from "./Logo.svelte";
@@ -16,6 +16,9 @@
   let closed = $state<Record<string, boolean>>({});
   const here = (d: string, slug: string) => app.view.kind === "project" && app.view.device === d && app.view.slug === slug;
   const online = $derived(app.devices.filter((d) => app.st(d.id).status === "online").length);
+  // the rule fm budget pauses subagents by: weekly usage 10+ points past the week's share gone, or 90%+ either way
+  const ahead = (u: Usage) => (u.seven_day ?? 0) >= 90 || (u.week_gone != null && (u.seven_day ?? 0) > u.week_gone * 100 + 10);
+  const pct = (n: number) => `${Math.round(n)}%`;
 </script>
 
 <aside>
@@ -69,6 +72,28 @@
               {#if p.active}<span class="mono t3 tid" title={p.active.title}>{p.active.id}</span>{/if}
             </button>
           {/each}
+        </div>
+      {/if}
+    {/each}
+  </div>
+
+  <div class="usage">
+    {#each app.devices as d (d.id)}
+      {@const u = app.st(d.id).usage}
+      {#if u.five_hour != null || u.seven_day != null}
+        <div class="ublock" title="Plan usage on {d.name}, from its newest Claude Code statusline">
+          {#if app.devices.length > 1}<div class="t3 uname ellipsis">{d.name}</div>{/if}
+          {#if u.five_hour != null}
+            <div class="meter"><span class="ul">5 h</span>
+              <div class="track"><div class="fill" class:hot={u.five_hour >= 90} style:width={pct(u.five_hour)}></div></div>
+              <span class="pct">{pct(u.five_hour)}</span></div>
+          {/if}
+          {#if u.seven_day != null}
+            <div class="meter"><span class="ul">Week</span>
+              <div class="track"><div class="fill" class:hot={ahead(u)} style:width={pct(u.seven_day)}></div>
+                {#if u.week_gone != null}<div class="pace" style:left={pct(u.week_gone * 100)} title="an even pace for the week"></div>{/if}</div>
+              <span class="pct">{pct(u.seven_day)}</span></div>
+          {/if}
         </div>
       {/if}
     {/each}
@@ -172,6 +197,51 @@
   }
   .head {
     padding: 0 8px 6px;
+  }
+  .usage {
+    padding: 0 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .uname {
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+  .meter {
+    display: grid;
+    grid-template-columns: 34px 1fr 32px;
+    align-items: center;
+    gap: 6px;
+    height: 16px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .track {
+    position: relative;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--surface-2);
+  }
+  .fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--text-3);
+    transition: width 0.4s var(--ease);
+  }
+  .fill.hot {
+    background: var(--warn);
+  }
+  .pace {
+    position: absolute;
+    top: -2px;
+    width: 1px;
+    height: 8px;
+    background: var(--text-2);
+  }
+  .pct {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
   .projects {
     flex: 1;
