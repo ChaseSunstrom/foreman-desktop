@@ -1,0 +1,184 @@
+:root {
+  --bg: #07070d;
+  --bg-2: #0c0c16;
+  --panel: rgba(255, 255, 255, 0.035);
+  --panel-2: rgba(255, 255, 255, 0.06);
+  --panel-3: rgba(255, 255, 255, 0.09);
+  --line: rgba(255, 255, 255, 0.075);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --text: #edecf7;
+  --dim: #a4a2bd;
+  --faint: #6a6884;
+  --accent: #8d7dff;
+  --accent-2: #40d8f6;
+  --ok: #3ddc97;
+  --warn: #fbbf24;
+  --bad: #fb7185;
+  --grad: linear-gradient(120deg, #8d7dff 0%, #6aa8ff 50%, #40d8f6 100%);
+  --grad-soft: linear-gradient(120deg, rgba(141, 125, 255, 0.18), rgba(64, 216, 246, 0.12));
+  --t-fix: #fbbf24;
+  --t-feature: #a78bfa;
+  --t-clean: #2dd4bf;
+  --t-perf: #fb923c;
+  --t-security: #fb7185;
+  --t-research: #60a5fa;
+  --r: 14px;
+  --r-sm: 9px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  font: 14px/1.5 "Inter Variable", system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* the slow aurora behind everything: two soft gradients drifting, transform-only so it stays cheap */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: -30%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 35% at 25% 20%, rgba(141, 125, 255, 0.16), transparent 70%),
+    radial-gradient(35% 30% at 80% 75%, rgba(64, 216, 246, 0.1), transparent 70%);
+  animation: drift 38s var(--ease) infinite alternate;
+}
+body::after {
+  background: radial-gradient(30% 25% at 70% 15%, rgba(236, 72, 153, 0.07), transparent 70%);
+  animation-duration: 52s;
+  animation-direction: alternate-reverse;
+}
+@keyframes drift {
+  from { transform: translate3d(-4%, -2%, 0) rotate(0deg); }
+  to { transform: translate3d(4%, 3%, 0) rotate(8deg); }
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: rgba(141, 125, 255, 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.faint {
+  color: var(--faint);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 20px 40px -24px rgba(0, 0, 0, 0.6);
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.grad-text {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* a border that turns while something runs */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.running-ring {
+  position: relative;
+}
+.running-ring::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(from var(--angle), transparent 0 60%, #8d7dff 75%, #40d8f6 90%, transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: spin-angle 2.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes spin-angle {
+  to { --angle: 360deg; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, var(--panel) 0%, var(--panel-3) 50%, var(--panel) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: var(--r-sm);
+}
+@keyframes shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
