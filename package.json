@@ -1,7 +1,7 @@
 {
   "name": "foreman-desktop",
   "version": "0.1.0",
-  "description": "",
+  "description": "Foreman Desktop: every project, session and agent on every device",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

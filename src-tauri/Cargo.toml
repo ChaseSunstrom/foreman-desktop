@@ -2,6 +2,7 @@
 name = "foreman-desktop"
 version = "0.1.0"
 description = "Foreman Desktop: every project, session and agent on every device"
+license = "MIT"
 authors = ["ChaseSunstrom"]
 edition = "2021"
 
