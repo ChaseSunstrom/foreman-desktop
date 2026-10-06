@@ -15,6 +15,32 @@
   invoke<Peer[]>("tailscale_peers").then((p) => (peers = p)).catch(() => {});
 
   const known = (h: string) => app.devices.some((d) => d.host === h);
+
+  // an unknown host key stops ssh (StrictHostKeyChecking=yes): the user compares its fingerprint and trusts it here
+  type Key = { fingerprint: string; line: string };
+  let trust = $state<null | { id: string; host: string; keys: Key[] | null; error?: string }>(null);
+  const unknownKey = (e?: string) => !!e && /Host key verification failed|No .* host key is known/i.test(e);
+  const changedKey = (e?: string) => !!e && /IDENTIFICATION HAS CHANGED|host key .* changed/i.test(e);
+  async function scan(id: string, host: string) {
+    trust = { id, host, keys: null };
+    try {
+      trust.keys = await invoke<Key[]>("host_key_scan", { host });
+    } catch (e) {
+      trust.error = String(e);
+    }
+  }
+  async function doTrust() {
+    if (!trust?.keys) return;
+    try {
+      await invoke("host_key_trust", { host: trust.host, lines: trust.keys.map((k) => k.line) });
+      const d = app.device(trust.id);
+      trust = null;
+      if (d) app.connect(d);
+      app.toast("ok", "Host key trusted; connecting");
+    } catch (e) {
+      if (trust) trust.error = String(e);
+    }
+  }
   function add(e?: Event, n = name, h = host) {
     e?.preventDefault();
     tried = true;
@@ -45,7 +71,11 @@
           <span><b>{st.sessions.length}</b> sessions</span>
           <span><b>{st.agents.filter((a) => a.installed).length}</b> agents</span>
         </div>
-        {#if st.status === "offline"}<span class="err" title={st.error}>{st.error?.slice(0, 80)}</span>{/if}
+        {#if st.status === "offline" && changedKey(st.error)}
+          <span class="err strong">Its host key changed: check the device before trusting it again (ssh-keygen -R)</span>
+        {:else if st.status === "offline" && unknownKey(st.error) && d.host}
+          <button class="trust" onclick={() => scan(d.id, d.host!)}><Icon name="shield" size={13} /> Trust this device…</button>
+        {:else if st.status === "offline"}<span class="err" title={st.error}>{st.error?.slice(0, 80)}</span>{/if}
         <button class="icon-btn" title="Reconnect" onclick={() => app.connect(d)}><Icon name="refresh" size={14} /></button>
         {#if d.id !== "local"}
           <button class="icon-btn" title="Remove" onclick={() => app.removeDevice(d.id)}><Icon name="trash" size={14} /></button>
@@ -63,8 +93,27 @@
     </div>
     {#if problem}<div class="bad-note" transition:slide>{problem}</div>{/if}
     <div class="faint note">It needs Foreman installed (its install.sh) and key-based ssh; nothing listens on a new port.
-      The first connection trusts the device's host key; a key that changes later is refused.</div>
+      A device whose host key you haven't trusted yet asks you to compare its fingerprint first.</div>
   </form>
+
+  {#if trust}
+    <div class="card trust-card" transition:slide>
+      <div class="card-title"><Icon name="shield" size={14} /> Trust {trust.host}?</div>
+      {#if trust.error}
+        <div class="bad-note">{trust.error}</div>
+      {:else if !trust.keys}
+        <div class="faint">Asking the device for its host keys…</div>
+      {:else}
+        <p class="dim">Compare these with the device's own (<span class="mono">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</span>
+          on it). Trust them only if they match: from then on ssh refuses anything else.</p>
+        <ul class="keys">{#each trust.keys as k}<li class="mono">{k.fingerprint}</li>{/each}</ul>
+        <div class="row">
+          <button class="go" onclick={doTrust}>They match: trust</button>
+          <button class="mini" onclick={() => (trust = null)}>Cancel</button>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   {#if peers.length}
     <div class="card add" in:fly={{ y: 10, delay: 140 }}>
@@ -182,6 +231,37 @@
     opacity: 0.4;
   }
   .note {
+    font-size: 12px;
+  }
+  .trust {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 11px;
+    border-radius: 9px;
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--warn);
+    font-size: 12.5px;
+  }
+  .err.strong {
+    max-width: 380px;
+    white-space: normal;
+  }
+  .trust-card {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+  .trust-card p {
+    margin: 0;
+    font-size: 13px;
+  }
+  .keys {
+    margin: 0;
+    padding-left: 18px;
     font-size: 12px;
   }
   .bad-note {
