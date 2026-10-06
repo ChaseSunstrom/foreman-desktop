@@ -24,6 +24,7 @@
   let lightbox = $state<string | null>(null);
   let main: Stream | null = null;
   let whole = $state(false); // the last 4000 transcript lines first; the whole history on request
+  let allSteps = $state(false); // tool runs fold to one row each; this opens them all, to audit what was done
   let sub: Stream | null = null;
 
   const d = $derived(app.device(s.device)!);
@@ -135,6 +136,11 @@
       <button class="tab" class:on={tab === "files"} onclick={() => (tab = "files")}>Files</button>
       <button class="tab" class:on={tab === "images"} onclick={() => (tab = "images")}>Images<span class="n">{events.filter((e) => e.kind === "image").length || ""}</span></button>
     {/if}
+    {#if tab === "chat"}
+      <span class="grow"></span>
+      <button class="btn ghost small steps" onclick={() => (allSteps = !allSteps)} title="Tool calls fold to one row per run">
+        {allSteps ? "Fold steps" : "Show every step"}</button>
+    {/if}
   </div>
 
   {#if err && !events.length}<div class="errbar">{err}</div>{/if}
@@ -143,7 +149,7 @@
     <button class="btn ghost history" onclick={() => (whole = true)}>Showing the latest part · load the full history</button>
   {/if}
   {#if tab === "chat"}
-    <Transcript {events} device={d} sid={s.id} source={s.source} {busy} onimage={(src) => (lightbox = src)} />
+    <Transcript {events} device={d} sid={s.id} source={s.source} {busy} {allSteps} onimage={(src) => (lightbox = src)} />
   {:else if tab === "agents"}
     <div class="agents">
       <div class="alist">
@@ -156,7 +162,7 @@
       </div>
       <div class="aview">
         {#if agentSel}
-          <Transcript events={agentEvents} device={d} sid={s.id} agent={agentSel} source="claude" onimage={(src) => (lightbox = src)} />
+          <Transcript events={agentEvents} device={d} sid={s.id} agent={agentSel} source="claude" {allSteps} onimage={(src) => (lightbox = src)} />
         {:else}<div class="empty">Pick a subagent to read what it did.</div>{/if}
       </div>
     </div>
@@ -227,6 +233,15 @@
   }
   .tabs {
     flex: none;
+    display: flex;
+    align-items: center;
+  }
+  .grow {
+    flex: 1;
+  }
+  .steps {
+    margin-right: 12px;
+    font-size: 12px;
   }
   .history {
     align-self: center;

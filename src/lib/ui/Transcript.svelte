@@ -11,13 +11,14 @@
   import Bits from "./Bits.svelte";
   import Markdown from "./Markdown.svelte";
 
-  let { events, device, sid, agent, source, busy = false, onimage }: {
+  let { events, device, sid, agent, source, busy = false, allSteps = false, onimage }: {
     events: Ev[];
     device: Device;
     sid: string;
     agent?: string;
     source: "fm" | "claude";
     busy?: boolean;
+    allSteps?: boolean; // every folded run of tool calls open at once: what the agent did, step by step
     onimage?: (src: string) => void;
   } = $props();
 
@@ -46,7 +47,7 @@
       const k = key(e, i);
       const last = out[out.length - 1];
       if (e.kind === "tool" && last?.tools) last.tools.push({ e, k });
-      else out.push(e.kind === "tool" ? { key: k, tools: [{ e, k }] } : { key: k, e });
+      else out.push(e.kind === "tool" ? { key: `run:${k}`, tools: [{ e, k }] } : { key: k, e }); // a run's own key: not its first call's
     });
     return out;
   });
@@ -87,15 +88,16 @@
       {#if b.tools}
         {@const failed = b.tools.filter(({ e }) => e.id && results.get(e.id) && !results.get(e.id)!.ok).length}
         {@const running = busy && b === blocks[blocks.length - 1] && b.tools.some(({ e }) => !e.id || !results.get(e.id))}
-        <div class="group" class:opened={open[b.key]}>
-          <button class="ghead" onclick={() => (open[b.key] = !open[b.key])}>
-            <span class="t3 caret" class:openc={open[b.key]}><Icon name="chevron" size={11} /></span>
+        {@const isOpen = allSteps || open[b.key]}
+        <div class="group" class:opened={isOpen}>
+          <button class="ghead" onclick={() => (open[b.key] = !isOpen)}>
+            <span class="t3 caret" class:openc={isOpen}><Icon name="chevron" size={11} /></span>
             {#if running}<Bits kind="spinner" size={11} />{/if}
             <span class="gcount">{b.tools.length === 1 ? "1 step" : `${b.tools.length} steps`}</span>
             <span class="t3 ellipsis">{summary(b.tools)}</span>
             {#if failed}<span class="gfail">{failed} failed</span>{/if}
           </button>
-          {#if open[b.key]}
+          {#if isOpen}
             <div class="gbody" transition:fade={{ duration: 100 }}>
               {#each b.tools as { e, k } (k)}
                 {@const r = e.id ? results.get(e.id) : undefined}

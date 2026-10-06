@@ -40,7 +40,8 @@
   const dev = $derived(app.device(device));
   const a = $derived(v?.active ?? null);
   const waits = $derived(Object.fromEntries([...(v?.queue ?? []), ...(v?.inbox ?? [])].map((i) => [i.id, i.waits])));
-  const plans = $derived([...(v?.queue ?? []), ...(v?.inbox ?? [])].filter((i) => i.waits === "plan approval" && i.plan));
+  // a yes is asked only for a plan the user can read; an item still without one waits in the inbox until it's planned
+  const plans = $derived([...(v?.queue ?? []), ...(v?.inbox ?? [])].filter((i) => i.waits === "plan approval" && i.plan?.approach?.trim()));
   const tabs = $derived([
     { id: "overview", label: "Overview", n: null },
     { id: "queue", label: "Queue", n: full?.queue.length ?? v?.queue?.length ?? 0 },
@@ -147,8 +148,13 @@
               {/if}
               <div class="tfoot t3">
                 <span><Icon name="shield" size={12} /> audits {a.audits.done}/{a.audits.need}</span>
-                {#if a.blockers.length}<span title={a.blockers.join("\n")}>{a.blockers.length} left before it can close</span>{/if}
               </div>
+              {#if a.blockers.length}
+                <ul class="blockers t3">
+                  {#each a.blockers.slice(0, 4) as b}<li class="ellipsis" title={b}>{b}</li>{/each}
+                  {#if a.blockers.length > 4}<li title={a.blockers.slice(4).join("\n")}>and {a.blockers.length - 4} more</li>{/if}
+                </ul>
+              {/if}
             </section>
           {:else}
             <section class="panel empty">No active task. Start one from the queue or inbox.</section>
@@ -161,9 +167,8 @@
                 <div class="plan">
                   <div class="trow"><Bits kind="type" type={i.type} tier={i.tier} /><span class="mono t3">{i.id}</span><span class="ellipsis">{i.title}</span></div>
                   {#if i.plan?.interpretation?.trim()}<p><b>Interpretation</b> {i.plan.interpretation}</p>{/if}
-                  {#if i.plan?.approach?.trim()}<p><b>Approach</b> {i.plan.approach}</p>{/if}
-                  <button class="btn" disabled={busy[`a${i.id}`]} onclick={() => approve(i)}><Icon name="check" size={13} />
-                    {i.plan?.approach?.trim() ? "Approve plan" : "Go ahead"}</button>
+                  <p><b>Approach</b> {i.plan!.approach}</p>
+                  <button class="btn" disabled={busy[`a${i.id}`]} onclick={() => approve(i)}><Icon name="check" size={13} /> Approve plan</button>
                 </div>
               {/each}
             </section>
@@ -509,6 +514,14 @@
   }
   .dec {
     padding: 9px 0;
+  }
+  .blockers {
+    margin: 6px 0 0;
+    padding: 0 0 0 18px;
+    font-size: 11.5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .review .rh {
     margin: 18px 0 6px;
