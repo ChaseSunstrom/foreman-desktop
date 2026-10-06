@@ -1,267 +1,219 @@
 <script lang="ts">
-  import { fly } from "svelte/transition";
+  import { fade } from "svelte/transition";
   import { flip } from "svelte/animate";
-  import { Tween } from "svelte/motion";
-  import { cubicOut } from "svelte/easing";
   import { app } from "$lib/app.svelte";
-  import { AGENT, base } from "$lib/types";
+  import { ago, base } from "$lib/types";
   import Icon from "./Icon.svelte";
   import Bits from "./Bits.svelte";
-
-  const hour = new Date().getHours();
-  const hello = hour < 5 ? "Working late" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   const projects = $derived(
     app.devices.flatMap((d) => app.st(d.id).projects.map((p) => ({ ...p, device: d.id, deviceName: d.name }))),
   );
-  const active = $derived(
-    projects.filter((p) => p.active).sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)),
-  );
-  const online = $derived(app.devices.filter((d) => app.st(d.id).status === "online").length);
-  const sessions = $derived(
-    [...app.allSessions].sort((a, b) => (b.updated > a.updated ? 1 : -1)).slice(0, 6),
-  );
-
-  const stats = $derived([
-    { label: "Devices online", value: online, of: app.devices.length, icon: "server" },
-    { label: "Projects", value: projects.length, icon: "folder" },
-    { label: "Sessions running", value: app.running, icon: "terminal" },
-    { label: "Waiting on you", value: app.waiting, icon: "alert", warn: app.waiting > 0 },
-  ]);
-  const tweens = [0, 1, 2, 3].map(() => new Tween(0, { duration: 900, easing: cubicOut }));
-  $effect(() => stats.forEach((s, i) => (tweens[i].target = s.value)));
+  const active = $derived(projects.filter((p) => p.active).sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)));
+  const waiting = $derived(projects.filter((p) => p.waits > 0));
+  const liveSessions = $derived(app.sessions.filter((s) => s.live));
+  const recent = $derived(app.sessions.filter((s) => !s.live).slice(0, 8));
+  const open = (device: string, slug: string, tab?: string) => (app.view = { kind: "project", device, slug, tab });
 </script>
 
 <div class="page">
-  <header in:fly={{ y: 10, duration: 500 }}>
-    <h1>{hello}<span class="grad-text">.</span></h1>
-    <p class="dim">Everything Foreman is doing, on every device.</p>
-  </header>
-
-  <div class="stats">
-    {#each stats as s, i}
-      <div class="card stat" class:warn={s.warn} in:fly={{ y: 14, delay: 60 * i, duration: 500 }}>
-        <div class="stat-icon"><Icon name={s.icon} size={18} /></div>
-        <div class="stat-value">
-          {Math.round(tweens[i].current)}{#if s.of !== undefined}<span class="of">/{s.of}</span>{/if}
-        </div>
-        <div class="stat-label">{s.label}</div>
-      </div>
-    {/each}
+  <div class="pagehead">
+    <h1>Home</h1>
+    <span class="t3 summary">
+      {active.length} in progress · {liveSessions.length} live session{liveSessions.length === 1 ? "" : "s"}
+      {#if waiting.length}· <span class="warn">{app.waiting} waiting on you</span>{/if}
+    </span>
   </div>
 
-  <section>
-    <div class="card-title"><Icon name="zap" size={14} /> Active work</div>
-    {#if !active.length}
-      <div class="empty card">No task is active on any device. Start one from a project's queue or inbox.</div>
-    {/if}
-    <div class="grid">
-      {#each active as p, i (p.device + p.project)}
-        <button class="card work" animate:flip={{ duration: 350 }} in:fly={{ y: 16, delay: 40 * i, duration: 450 }}
-          onclick={() => (app.view = { kind: "project", device: p.device, slug: p.project })}>
-          <div class="work-top">
-            <Bits kind="type" type={p.active!.type} tier={p.active!.tier} />
-            <span class="faint mono">{p.active!.id}</span>
-            <span class="where">{base(p.root)} · {p.deviceName}</span>
+  <div class="body">
+    <div class="col">
+      {#if waiting.length}
+        <section in:fade>
+          <div class="label">Waiting on you</div>
+          <div class="panel rows">
+            {#each waiting as p (p.device + p.project)}
+              <button class="row" onclick={() => open(p.device, p.project, "inbox")}>
+                <Icon name="alert" size={14} />
+                <span class="strong">{base(p.root)}</span>
+                <span class="t3">{p.waits} item{p.waits === 1 ? "" : "s"} need a yes</span>
+                <span class="t3 right">{p.deviceName}</span>
+              </button>
+            {/each}
           </div>
-          <div class="work-title">{p.active!.title}</div>
-          <div class="work-foot">
-            <span class="stage">{p.active!.stage}</span>
-            <span class="faint">{p.active!.steps_done}/{p.active!.steps_total} steps</span>
-            {#if p.waits}<span class="needs"><Icon name="alert" size={12} /> needs you</span>{/if}
-          </div>
-          <Bits kind="bar" value={p.active!.steps_total ? p.active!.steps_done / p.active!.steps_total : 0} height={4} />
-        </button>
-      {/each}
-    </div>
-  </section>
+        </section>
+      {/if}
 
-  <section>
-    <div class="card-title"><Icon name="terminal" size={14} /> Recent sessions</div>
-    {#if !sessions.length}
-      <div class="empty card">No agent sessions yet. <button class="link" onclick={() => (app.newSession = {})}>Start one</button></div>
-    {/if}
-    <div class="rows">
-      {#each sessions as s, i (s.device + s.id)}
-        <button class="card row" class:running-ring={s.status === "running"} in:fly={{ x: -10, delay: 40 * i }}
-          onclick={() => (app.view = { kind: "sessions", device: s.device, id: s.id })}>
-          <span class="agent" style="--c: {AGENT[s.agent]?.color}">{AGENT[s.agent]?.mark ?? "?"}</span>
-          <span class="row-title">{s.title}</span>
-          <span class="faint row-last">{s.last?.text ?? ""}</span>
-          <Bits kind="dot" status={s.status} />
-        </button>
-      {/each}
+      <section>
+        <div class="label">In progress</div>
+        <div class="panel rows">
+          {#each active as p (p.device + p.project)}
+            {@const a = p.active!}
+            <button class="row task" animate:flip={{ duration: 200 }} onclick={() => open(p.device, p.project)}>
+              <div class="tmain">
+                <div class="tline">
+                  <Bits kind="type" type={a.type} tier={a.tier} />
+                  <span class="mono t3">{a.id}</span>
+                  <span class="ellipsis strong">{a.title}</span>
+                </div>
+                <div class="tline t3 small">
+                  <span>{base(p.root)} · {p.deviceName}</span>
+                  <span class="stage">{a.stage}</span>
+                  <span>{a.steps_done}/{a.steps_total} steps</span>
+                  {#if p.inbox}<span>{p.inbox} in inbox</span>{/if}
+                </div>
+              </div>
+              <div class="tbar"><Bits kind="bar" value={a.steps_total ? a.steps_done / a.steps_total : 0} /></div>
+            </button>
+          {:else}
+            <div class="empty">No task is active on any device.</div>
+          {/each}
+        </div>
+      </section>
     </div>
-  </section>
+
+    <div class="col">
+      <section>
+        <div class="label">Live sessions</div>
+        <div class="panel rows">
+          {#each liveSessions as s (s.key)}
+            {@render sessionRow(s)}
+          {:else}
+            <div class="empty">Nothing running. <button class="btn ghost" onclick={() => (app.newSession = {})}>Start a session</button></div>
+          {/each}
+        </div>
+      </section>
+      <section>
+        <div class="label">Recent sessions</div>
+        <div class="panel rows">
+          {#each recent as s (s.key)}
+            {@render sessionRow(s)}
+          {:else}
+            <div class="empty">No sessions yet.</div>
+          {/each}
+        </div>
+      </section>
+      <section>
+        <div class="label">Devices</div>
+        <div class="panel rows">
+          {#each app.devices as d (d.id)}
+            {@const st = app.st(d.id)}
+            <button class="row" onclick={() => (app.view = { kind: "devices" })}>
+              <Bits kind="dot" status={st.status} />
+              <span class="strong">{d.name}</span>
+              <span class="t3">{st.projects.length} projects · {st.claude.filter((c) => c.live).length + st.sessions.filter((x) => x.status === "running").length} live</span>
+              <span class="t3 right">{st.status === "offline" ? "unreachable" : d.host ?? "this machine"}</span>
+            </button>
+          {/each}
+        </div>
+      </section>
+    </div>
+  </div>
 </div>
+
+{#snippet sessionRow(s: (typeof app.sessions)[number])}
+  <button class="row" onclick={() => (app.view = { kind: "sessions", device: s.device, id: s.id, source: s.source })}>
+    <Bits kind="agent" agent={s.agent} />
+    <div class="smain">
+      <div class="ellipsis strong">{s.title}</div>
+      <div class="ellipsis t3 small">{base(s.cwd)} · {s.kind}{s.subagents ? ` · ${s.subagents} subagents` : ""}</div>
+    </div>
+    {#if s.live}<Bits kind="dot" status="live" />{:else}<span class="t3 small">{ago(s.updated)}</span>{/if}
+  </button>
+{/snippet}
 
 <style>
   .page {
-    padding: 34px 40px 40px;
     display: flex;
     flex-direction: column;
-    gap: 28px;
-    max-width: 1280px;
+    height: 100%;
   }
-  h1 {
-    margin: 0;
-    font-size: 34px;
-    letter-spacing: -0.03em;
-    font-weight: 750;
-  }
-  header p {
-    margin: 6px 0 0;
-  }
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-  }
-  .stat {
-    padding: 16px 18px;
-    position: relative;
-    overflow: hidden;
-  }
-  .stat::after {
-    content: "";
-    position: absolute;
-    right: -30px;
-    top: -30px;
-    width: 110px;
-    height: 110px;
-    background: radial-gradient(closest-side, rgba(141, 125, 255, 0.18), transparent);
-  }
-  .stat.warn::after {
-    background: radial-gradient(closest-side, rgba(251, 191, 36, 0.22), transparent);
-  }
-  .stat-icon {
-    color: var(--dim);
-  }
-  .stat-value {
-    font-size: 30px;
-    font-weight: 750;
-    letter-spacing: -0.03em;
-    margin-top: 6px;
-    font-variant-numeric: tabular-nums;
-  }
-  .of {
-    font-size: 16px;
-    color: var(--faint);
-    font-weight: 500;
-  }
-  .stat-label {
-    color: var(--dim);
+  .summary {
     font-size: 12.5px;
+  }
+  .warn {
+    color: var(--warn);
+  }
+  .body {
+    flex: 1;
+    overflow: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 20px;
+    padding: 20px;
+    align-content: start;
+  }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
   }
   section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 14px;
-  }
-  .work {
-    text-align: left;
-    padding: 16px 18px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    color: inherit;
-    transition: transform 0.25s var(--ease), border-color 0.25s, background 0.25s;
-  }
-  .work:hover {
-    transform: translateY(-3px);
-    border-color: var(--line-2);
-    background: var(--panel-2);
-  }
-  .work-top {
-    display: flex;
-    align-items: center;
     gap: 8px;
-  }
-  .where {
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--faint);
-  }
-  .work-title {
-    font-weight: 600;
-    font-size: 15px;
-    line-height: 1.35;
-  }
-  .work-foot {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    font-size: 12.5px;
-  }
-  .stage {
-    text-transform: capitalize;
-    color: var(--accent-2);
-  }
-  .needs {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--warn);
-    margin-left: auto;
   }
   .rows {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    overflow: hidden;
   }
   .row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 11px 14px;
-    color: inherit;
+    gap: 10px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: none;
     text-align: left;
-    transition: background 0.2s, transform 0.2s var(--ease);
+    color: var(--text-2);
+  }
+  .row:last-child {
+    border-bottom: 0;
   }
   .row:hover {
-    background: var(--panel-2);
-    transform: translateX(3px);
+    background: var(--surface);
   }
-  .agent {
-    width: 26px;
-    height: 26px;
-    flex: none;
-    border-radius: 8px;
-    display: grid;
-    place-items: center;
-    font-weight: 800;
+  .strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+  .right {
+    margin-left: auto;
     font-size: 12px;
-    color: var(--c);
-    background: color-mix(in srgb, var(--c) 15%, transparent);
-    border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
   }
-  .row-title {
-    font-weight: 550;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 40%;
+  .small {
+    font-size: 11.5px;
   }
-  .row-last {
+  .task {
+    align-items: stretch;
+  }
+  .tmain,
+  .smain {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .tline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .tline .mono {
+    flex: none;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 12.5px;
   }
-  .empty {
-    padding: 18px;
-    color: var(--dim);
+  .stage {
+    color: var(--accent);
   }
-  .link {
-    background: none;
-    border: 0;
-    color: var(--accent-2);
-    padding: 0;
+  .tbar {
+    width: 90px;
+    flex: none;
+    align-self: center;
   }
 </style>

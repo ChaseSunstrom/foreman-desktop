@@ -12,12 +12,13 @@
   .sw {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    background: none;
+    gap: 7px;
+    height: 28px;
+    padding: 0 4px;
     border: 0;
-    padding: 4px 2px;
-    color: var(--dim);
-    font-size: 13px;
+    background: none;
+    color: var(--text-2);
+    font-size: 12.5px;
   }
   .sw.on {
     color: var(--text);
@@ -27,30 +28,27 @@
     cursor: progress;
   }
   .track {
-    width: 34px;
-    height: 20px;
-    border-radius: 99px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid var(--line-2);
+    width: 26px;
+    height: 15px;
+    border-radius: 8px;
+    background: var(--line-2);
     position: relative;
-    transition: background 0.3s var(--ease);
+    transition: background 0.15s;
   }
   .on .track {
-    background: var(--grad);
-    border-color: transparent;
+    background: var(--accent);
   }
   .knob {
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 14px;
-    height: 14px;
+    width: 11px;
+    height: 11px;
     border-radius: 50%;
     background: #fff;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-    transition: transform 0.35s var(--spring);
+    transition: transform 0.15s var(--ease);
   }
   .on .knob {
-    transform: translateX(14px);
+    transform: translateX(11px);
   }
 </style>

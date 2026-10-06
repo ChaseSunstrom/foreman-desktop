@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { fly, slide } from "svelte/transition";
-  import { flip } from "svelte/animate";
+  import { slide } from "svelte/transition";
   import { invoke } from "@tauri-apps/api/core";
   import { app, hostProblem } from "$lib/app.svelte";
   import Icon from "./Icon.svelte";
@@ -52,105 +51,98 @@
 </script>
 
 <div class="page">
-  <header in:fly={{ y: 8 }}>
+  <div class="pagehead">
+    <Icon name="server" size={15} />
     <h1>Devices</h1>
-    <p class="dim">Each device runs Foreman; the app reaches the others over ssh (Tailscale SSH works), never through a new server.</p>
-  </header>
-
-  <div class="list">
-    {#each app.devices as d (d.id)}
-      {@const st = app.st(d.id)}
-      <div class="card dev" animate:flip={{ duration: 300 }} in:fly={{ y: 10 }} out:slide>
-        <Bits kind="dot" status={st.status} />
-        <div class="dmeta">
-          <div class="dname">{d.name}</div>
-          <div class="faint mono">{d.host ?? "this machine"}</div>
-        </div>
-        <div class="nums">
-          <span><b>{st.projects.length}</b> projects</span>
-          <span><b>{st.sessions.length}</b> sessions</span>
-          <span><b>{st.agents.filter((a) => a.installed).length}</b> agents</span>
-        </div>
-        {#if st.status === "offline" && changedKey(st.error)}
-          <span class="err strong">Its host key changed: check the device before trusting it again (ssh-keygen -R)</span>
-        {:else if st.status === "offline" && unknownKey(st.error) && d.host}
-          <button class="trust" onclick={() => scan(d.id, d.host!)}><Icon name="shield" size={13} /> Trust this device…</button>
-        {:else if st.status === "offline"}<span class="err" title={st.error}>{st.error?.slice(0, 80)}</span>{/if}
-        <button class="icon-btn" title="Reconnect" onclick={() => app.connect(d)}><Icon name="refresh" size={14} /></button>
-        {#if d.id !== "local"}
-          <button class="icon-btn" title="Remove" onclick={() => app.removeDevice(d.id)}><Icon name="trash" size={14} /></button>
-        {/if}
-      </div>
-    {/each}
+    <span class="t3 small">This machine, and others reached over ssh (Tailscale SSH works). Nothing listens on a new port.</span>
   </div>
-
-  <form class="card add" onsubmit={add} in:fly={{ y: 10, delay: 80 }}>
-    <div class="card-title"><Icon name="plus" size={14} /> Add a device</div>
-    <div class="row">
-      <input placeholder="Name (optional)" bind:value={name} />
-      <input class="mono" placeholder="ssh host — user@box or a Tailscale name" bind:value={host} />
-      <button class="go" disabled={!host.trim()}>Add</button>
-    </div>
-    {#if problem}<div class="bad-note" transition:slide>{problem}</div>{/if}
-    <div class="faint note">It needs Foreman installed (its install.sh) and key-based ssh; nothing listens on a new port.
-      A device whose host key you haven't trusted yet asks you to compare its fingerprint first.</div>
-  </form>
-
-  {#if trust}
-    <div class="card trust-card" transition:slide>
-      <div class="card-title"><Icon name="shield" size={14} /> Trust {trust.host}?</div>
-      {#if trust.error}
-        <div class="bad-note">{trust.error}</div>
-      {:else if !trust.keys}
-        <div class="faint">Asking the device for its host keys…</div>
-      {:else}
-        <p class="dim">Compare these with the device's own (<span class="mono">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</span>
-          on it). Trust them only if they match: from then on ssh refuses anything else.</p>
-        <ul class="keys">{#each trust.keys as k}<li class="mono">{k.fingerprint}</li>{/each}</ul>
-        <div class="row">
-          <button class="go" onclick={doTrust}>They match: trust</button>
-          <button class="mini" onclick={() => (trust = null)}>Cancel</button>
-        </div>
-      {/if}
-    </div>
-  {/if}
-
-  {#if peers.length}
-    <div class="card add" in:fly={{ y: 10, delay: 140 }}>
-      <div class="card-title"><Icon name="wifi" size={14} /> On your tailnet</div>
-      <div class="peers">
-        {#each peers as p}
-          <div class="peer" class:off={!p.online}>
-            <Bits kind="dot" status={p.online ? "online" : "stopped"} />
-            <span class="pname">{p.name}</span>
-            <span class="faint">{p.os}</span>
-            <button class="mini" disabled={known(p.dns)} onclick={() => add(undefined, p.name, p.dns)}>
-              {known(p.dns) ? "Added" : "Add"}
-            </button>
+  <div class="body">
+    <section class="panel">
+      {#each app.devices as d (d.id)}
+        {@const st = app.st(d.id)}
+        <div class="dev">
+          <Bits kind="dot" status={st.status} />
+          <div class="dmain">
+            <div class="strong">{d.name}</div>
+            <div class="t3 mono small">{d.host ?? "this machine"}</div>
           </div>
-        {/each}
+          <span class="t2 small nums">{st.projects.length} projects · {st.claude.length} Claude sessions · {st.agents.filter((a) => a.installed).length} agents</span>
+          {#if st.status === "offline" && changedKey(st.error)}
+            <span class="err small">Host key changed: check the device before trusting it again (ssh-keygen -R)</span>
+          {:else if st.status === "offline" && unknownKey(st.error) && d.host}
+            <button class="btn" onclick={() => scan(d.id, d.host!)}><Icon name="shield" size={13} /> Trust this device…</button>
+          {:else if st.status === "offline"}
+            <span class="err small ellipsis" title={st.error}>{st.error}</span>
+          {/if}
+          <button class="btn icon ghost" title="Reconnect" onclick={() => app.connect(d)}><Icon name="refresh" size={13} /></button>
+          {#if d.id !== "local"}<button class="btn icon ghost" title="Remove" onclick={() => app.removeDevice(d.id)}><Icon name="trash" size={13} /></button>{/if}
+        </div>
+      {/each}
+    </section>
+
+    {#if trust}
+      <section class="panel pad trust" transition:slide={{ duration: 140 }}>
+        <div class="strong">Trust {trust.host}?</div>
+        {#if trust.error}<div class="err small">{trust.error}</div>
+        {:else if !trust.keys}<div class="t3">Asking the device for its host keys…</div>
+        {:else}
+          <p class="t2 small">Compare these with the device's own (<span class="mono">ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</span> on it).
+            Trust them only if they match: from then on ssh refuses anything else.</p>
+          <ul class="keys mono small">{#each trust.keys as k}<li>{k.fingerprint}</li>{/each}</ul>
+          <div class="row"><button class="btn primary" onclick={doTrust}>They match — trust</button><button class="btn ghost" onclick={() => (trust = null)}>Cancel</button></div>
+        {/if}
+      </section>
+    {/if}
+
+    <form class="panel pad add" onsubmit={add}>
+      <div class="label">Add a device</div>
+      <div class="row">
+        <input class="input" placeholder="Name (optional)" bind:value={name} />
+        <input class="input mono grow" placeholder="ssh host — user@box or a Host alias" bind:value={host} />
+        <button class="btn primary" disabled={!host.trim()}>Add</button>
       </div>
-    </div>
-  {/if}
+      {#if problem}<div class="err small" transition:slide>{problem}</div>{/if}
+      <div class="t3 small">It needs Foreman installed (install.sh) and key-based ssh from here. A device whose host key you haven't trusted yet asks you to compare fingerprints first.</div>
+    </form>
+
+    {#if peers.length}
+      <section class="panel pad">
+        <div class="label">On your tailnet</div>
+        <div class="peers">
+          {#each peers as p}
+            <div class="peer" class:off={!p.online}>
+              <Bits kind="dot" status={p.online ? "online" : "stopped"} />
+              <span class="grow ellipsis">{p.name}</span>
+              <span class="t3 small">{p.os}</span>
+              <button class="btn" disabled={known(p.dns)} onclick={() => add(undefined, p.name, p.dns)}>{known(p.dns) ? "Added" : "Add"}</button>
+            </div>
+          {/each}
+        </div>
+      </section>
+    {/if}
+  </div>
 </div>
 
 <style>
   .page {
-    padding: 30px 38px 40px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    max-width: 1100px;
+    height: 100%;
   }
-  h1 {
-    margin: 0;
-    font-size: 28px;
-    letter-spacing: -0.025em;
+  .small {
+    font-size: 12px;
   }
-  header p {
-    margin: 6px 0 0;
+  .body {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 1000px;
   }
-  .list {
+  .pad {
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -158,144 +150,55 @@
   .dev {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 18px;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
   }
-  .dmeta {
-    flex: 1;
+  .dev:last-child {
+    border-bottom: 0;
   }
-  .dname {
-    font-weight: 650;
+  .dmain {
+    min-width: 140px;
+  }
+  .strong {
+    font-weight: 500;
   }
   .nums {
-    display: flex;
-    gap: 16px;
-    color: var(--dim);
-    font-size: 12.5px;
-  }
-  .nums b {
-    color: var(--text);
+    flex: 1;
   }
   .err {
     color: var(--bad);
-    font-size: 12px;
-    max-width: 260px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .icon-btn {
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
-    border: 1px solid var(--line);
-    background: var(--panel-2);
-    color: var(--dim);
-    display: grid;
-    place-items: center;
-  }
-  .icon-btn:hover {
-    color: var(--text);
-  }
-  .add {
-    padding: 16px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    max-width: 360px;
   }
   .row {
     display: flex;
-    gap: 10px;
-  }
-  input {
-    flex: 1;
-    padding: 9px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-    background: rgba(0, 0, 0, 0.3);
-    outline: none;
-  }
-  input:focus {
-    border-color: rgba(141, 125, 255, 0.5);
-    box-shadow: 0 0 0 3px rgba(141, 125, 255, 0.14);
-  }
-  .go {
-    padding: 0 20px;
-    border: 0;
-    border-radius: 10px;
-    background: var(--grad);
-    color: #0b0b14;
-    font-weight: 700;
-  }
-  .go:disabled {
-    opacity: 0.4;
-  }
-  .note {
-    font-size: 12px;
-  }
-  .trust {
-    display: inline-flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
-    padding: 6px 11px;
-    border-radius: 9px;
-    border: 1px solid rgba(251, 191, 36, 0.4);
-    background: rgba(251, 191, 36, 0.1);
-    color: var(--warn);
-    font-size: 12.5px;
   }
-  .err.strong {
-    max-width: 380px;
-    white-space: normal;
-  }
-  .trust-card {
-    padding: 16px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    border-color: rgba(251, 191, 36, 0.3);
-  }
-  .trust-card p {
-    margin: 0;
-    font-size: 13px;
+  .grow {
+    flex: 1;
   }
   .keys {
     margin: 0;
     padding-left: 18px;
-    font-size: 12px;
   }
-  .bad-note {
-    font-size: 12.5px;
-    color: var(--bad);
+  .trust p {
+    margin: 0;
   }
   .peers {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 6px;
   }
   .peer {
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: var(--panel);
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--r-sm);
+    background: var(--surface);
   }
   .peer.off {
-    opacity: 0.55;
-  }
-  .pname {
-    flex: 1;
-    font-weight: 550;
-  }
-  .mini {
-    padding: 4px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--line-2);
-    background: var(--panel-2);
-    font-size: 12px;
-  }
-  .mini:disabled {
-    opacity: 0.45;
+    opacity: 0.6;
   }
 </style>

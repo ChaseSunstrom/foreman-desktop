@@ -1,136 +1,104 @@
 <script lang="ts">
-  import { Spring } from "svelte/motion";
-  import { TYPE_COLOR, TIER_WORD } from "$lib/types";
+  import { TYPE_COLOR, TIER_WORD, AGENT } from "$lib/types";
 
   type Props =
     | { kind: "type"; type: string; tier?: string }
-    | { kind: "bar"; value: number; height?: number; glow?: boolean }
-    | { kind: "ring"; value: number; size?: number; running?: boolean }
+    | { kind: "bar"; value: number }
     | { kind: "dot"; status: string }
-    | { kind: "spinner"; size?: number };
+    | { kind: "spinner"; size?: number }
+    | { kind: "agent"; agent: string; size?: number };
   let p: Props = $props();
-
-  const spring = new Spring(0, { stiffness: 0.08, damping: 0.55 });
-  $effect(() => {
-    if (p.kind === "bar" || p.kind === "ring") spring.target = Math.max(0, Math.min(1, p.value || 0));
-  });
 </script>
 
 {#if p.kind === "type"}
-  <span class="chip" style="--c: {TYPE_COLOR[p.type] ?? 'var(--accent)'}">
-    {p.type}{#if p.tier}<span class="tier">· {TIER_WORD[p.tier] ?? p.tier}</span>{/if}
+  <span class="type" style="--c: {TYPE_COLOR[p.type] ?? 'var(--text-2)'}">
+    {p.type.toLowerCase()}{#if p.tier}<span class="tier">{TIER_WORD[p.tier] ?? p.tier}</span>{/if}
   </span>
 {:else if p.kind === "bar"}
-  <div class="bar" style="height: {p.height ?? 6}px">
-    <div class="fill" class:glow={p.glow} style="width: {spring.current * 100}%"></div>
-  </div>
-{:else if p.kind === "ring"}
-  {@const s = p.size ?? 18}
-  {@const r = s / 2 - 2}
-  {@const c = 2 * Math.PI * r}
-  <svg width={s} height={s} class:spin={p.running} viewBox="0 0 {s} {s}">
-    <circle cx={s / 2} cy={s / 2} {r} fill="none" stroke="rgba(255,255,255,.1)" stroke-width="2.4" />
-    <circle cx={s / 2} cy={s / 2} {r} fill="none" stroke="url(#g-ring)" stroke-width="2.4" stroke-linecap="round"
-      stroke-dasharray={c} stroke-dashoffset={c * (1 - spring.current)} transform="rotate(-90 {s / 2} {s / 2})" />
-    <defs>
-      <linearGradient id="g-ring" x1="0" x2="1" y1="0" y2="1">
-        <stop offset="0" stop-color="#8d7dff" /><stop offset="1" stop-color="#40d8f6" />
-      </linearGradient>
-    </defs>
-  </svg>
+  <div class="bar"><div class="fill" style="width: {Math.max(0, Math.min(1, p.value || 0)) * 100}%"></div></div>
 {:else if p.kind === "dot"}
-  <span class="dot {p.status}"></span>
+  <span class="dot {p.status}" title={p.status}></span>
 {:else if p.kind === "spinner"}
-  <span class="spinner" style="width: {p.size ?? 14}px; height: {p.size ?? 14}px"></span>
+  <span class="spinner" style="width: {p.size ?? 12}px; height: {p.size ?? 12}px"></span>
+{:else if p.kind === "agent"}
+  {@const a = AGENT[p.agent]}
+  <span class="agent" style="--c: {a?.color ?? 'var(--text-2)'}; --s: {p.size ?? 20}px" title={a?.name ?? p.agent}>{a?.mark ?? "?"}</span>
 {/if}
 
 <style>
-  .chip {
+  .type {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    border-radius: 999px;
+    gap: 5px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 4px;
     font-size: 11px;
-    font-weight: 650;
-    letter-spacing: 0.04em;
+    font-weight: 500;
     color: var(--c);
-    background: color-mix(in srgb, var(--c) 14%, transparent);
-    border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+    background: color-mix(in srgb, var(--c) 11%, transparent);
     white-space: nowrap;
   }
   .tier {
-    font-weight: 500;
-    opacity: 0.75;
-    letter-spacing: 0;
+    color: var(--text-3);
   }
   .bar {
     width: 100%;
-    border-radius: 99px;
-    background: rgba(255, 255, 255, 0.07);
+    height: 3px;
+    border-radius: 2px;
+    background: var(--line-2);
     overflow: hidden;
   }
   .fill {
     height: 100%;
-    border-radius: 99px;
-    background: var(--grad);
-    background-size: 200% 100%;
-    animation: flow 3s linear infinite;
-  }
-  .fill.glow {
-    box-shadow: 0 0 12px rgba(141, 125, 255, 0.6);
-  }
-  @keyframes flow {
-    to { background-position: -200% 0; }
-  }
-  .spin {
-    animation: rot 2.2s linear infinite;
-  }
-  @keyframes rot {
-    to { transform: rotate(360deg); }
+    background: var(--accent);
+    transition: width 0.4s var(--ease);
   }
   .dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    display: inline-block;
     flex: none;
-    background: var(--faint);
+    display: inline-block;
+    background: var(--text-3);
   }
   .dot.online,
-  .dot.idle {
+  .dot.idle,
+  .dot.ended {
     background: var(--ok);
-    box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.6);
-    animation: pulse 2.6s ease-out infinite;
   }
+  .dot.ended {
+    background: var(--text-3);
+  }
+  .dot.live,
   .dot.running,
   .dot.starting,
   .dot.connecting {
-    background: var(--accent-2);
-    animation: pulse-b 1.4s ease-out infinite;
+    background: var(--accent);
+    animation: pulse 1.6s ease-in-out infinite;
   }
   .dot.offline,
-  .dot.died {
+  .dot.died,
+  .dot.failed {
     background: var(--bad);
-  }
-  .dot.stopped {
-    background: var(--faint);
-  }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(61, 220, 151, 0.55); }
-    80%, 100% { box-shadow: 0 0 0 7px rgba(61, 220, 151, 0); }
-  }
-  @keyframes pulse-b {
-    0% { box-shadow: 0 0 0 0 rgba(64, 216, 246, 0.6); }
-    80%, 100% { box-shadow: 0 0 0 7px rgba(64, 216, 246, 0); }
   }
   .spinner {
     display: inline-block;
     flex: none;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.12);
-    border-top-color: var(--accent-2);
-    border-right-color: var(--accent);
-    animation: rot 0.8s linear infinite;
+    border: 1.5px solid var(--line-2);
+    border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  .agent {
+    width: var(--s);
+    height: var(--s);
+    flex: none;
+    border-radius: 5px;
+    display: inline-grid;
+    place-items: center;
+    font: 600 calc(var(--s) * 0.5) / 1 var(--mono);
+    color: var(--c);
+    background: color-mix(in srgb, var(--c) 13%, transparent);
   }
 </style>

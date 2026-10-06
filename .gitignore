@@ -8,3 +8,7 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# mobile icon sets `tauri icon` generates (desktop only)
+/src-tauri/icons/android/
+/src-tauri/icons/ios/

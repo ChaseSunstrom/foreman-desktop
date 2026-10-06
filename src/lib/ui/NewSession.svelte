@@ -3,6 +3,7 @@
   import { app } from "$lib/app.svelte";
   import { AGENT, base } from "$lib/types";
   import Icon from "./Icon.svelte";
+  import Bits from "./Bits.svelte";
 
   let { device: dev0, cwd: cwd0 }: { device?: string; cwd?: string } = $props();
   // the sheet opens with these and then they're the user's to change
@@ -31,72 +32,72 @@
     starting = true;
     const args = ["session", "start", "--agent", agent, "--cwd", cwd.trim(), "--json"];
     if (model.trim()) args.push("--model", model.trim());
-    const out = await app.act(device, [...args, "--", message.trim()], "Session started");
+    const out = await app.act<{ id: string }>(device, [...args, "--", message.trim()], "Session started");
     starting = false;
     if (out && typeof out === "object" && "id" in out) {
       close();
-      app.view = { kind: "sessions", device, id: (out as { id: string }).id };
+      app.view = { kind: "sessions", device, id: out.id, source: "fm" };
     }
   }
 </script>
 
 <svelte:window onkeydown={(e) => e.key === "Escape" && close()} />
 
-<div class="scrim" transition:fade={{ duration: 180 }} onclick={close} role="presentation"></div>
-<form class="sheet card" onsubmit={start} transition:fly={{ y: 24, duration: 320, opacity: 0 }}>
+<div class="scrim" transition:fade={{ duration: 100 }} onclick={close} role="presentation"></div>
+<form class="sheet panel" onsubmit={start} transition:fly={{ y: 10, duration: 160 }}>
   <div class="head">
     <h2>New session</h2>
-    <button type="button" class="x" onclick={close} aria-label="Close"><Icon name="x" /></button>
+    <span class="grow"></span>
+    <button type="button" class="btn icon ghost" onclick={close} aria-label="Close"><Icon name="x" size={14} /></button>
   </div>
 
-  <label>Device
-    <div class="pills">
-      {#each app.devices as d}
-        <button type="button" class="pill" class:sel={device === d.id} onclick={() => ((device = d.id), (cwd = ""))}>{d.name}</button>
-      {/each}
+  <div class="body">
+    <div class="field">
+      <span class="label">Device</span>
+      <div class="segs">
+        {#each app.devices as d}
+          <button type="button" class:on={device === d.id} onclick={() => ((device = d.id), (cwd = ""))}>
+            <Bits kind="dot" status={app.st(d.id).status} />{d.name}</button>
+        {/each}
+      </div>
     </div>
-  </label>
 
-  <label>Agent
-    <div class="agents">
-      {#each agents as a}
-        {@const meta = AGENT[a.agent]}
-        <button type="button" class="agent-card" class:sel={agent === a.agent} disabled={!a.installed}
-          style="--c: {meta?.color}" onclick={() => ((agent = a.agent), (model = ""))}>
-          <span class="mark">{meta?.mark}</span>
-          <span class="aname">{meta?.name ?? a.agent}</span>
-          <span class="aver">{a.installed ? (a.version ?? "installed") : "not installed"}</span>
-        </button>
-      {/each}
+    <div class="field">
+      <span class="label">Agent</span>
+      <div class="segs">
+        {#each agents as a}
+          <button type="button" class:on={agent === a.agent} disabled={!a.installed}
+            title={a.installed ? (a.version ?? "") : "not installed on this device"} onclick={() => ((agent = a.agent), (model = ""))}>
+            <Bits kind="agent" agent={a.agent} size={16} />{AGENT[a.agent]?.name ?? a.agent}</button>
+        {/each}
+      </div>
     </div>
-  </label>
 
-  <div class="two">
-    <label>Folder
-      <input list="projects" bind:value={cwd} placeholder="/path/to/repo" class="mono" />
-      <datalist id="projects">
-        {#each st.projects as p}<option value={p.root}>{base(p.root)}</option>{/each}
-      </datalist>
-    </label>
-    <label>Model
-      <input list="models" bind:value={model} placeholder="Agent's default" />
-      <datalist id="models">
-        {#each MODELS[agent] ?? [] as m}<option value={m}></option>{/each}
-      </datalist>
+    <div class="two">
+      <label class="field">
+        <span class="label">Folder</span>
+        <input class="input mono" list="np-projects" bind:value={cwd} placeholder="/path/to/repo" />
+        <datalist id="np-projects">{#each st.projects as p}<option value={p.root}>{base(p.root)}</option>{/each}</datalist>
+      </label>
+      <label class="field">
+        <span class="label">Model</span>
+        <input class="input" list="np-models" bind:value={model} placeholder="the agent's default" />
+        <datalist id="np-models">{#each MODELS[agent] ?? [] as m}<option value={m}></option>{/each}</datalist>
+      </label>
+    </div>
+
+    <label class="field">
+      <span class="label">First message</span>
+      <textarea class="input" bind:this={field} rows="6" bind:value={message}
+        placeholder="What should it do? In a Foreman project, Foreman's rules apply."
+        onkeydown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && start(e)}></textarea>
     </label>
   </div>
-
-  <label>First message
-    <textarea bind:this={field} rows="5" bind:value={message} placeholder="What should it do? Foreman's rules apply in Foreman projects."
-      onkeydown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && start(e)}></textarea>
-  </label>
 
   <div class="foot">
-    <span class="faint hint">Runs detached on {app.device(device)?.name}: it keeps going if you close the app.</span>
-    <button class="go" disabled={starting || !message.trim() || !cwd.trim()}>
-      {#if starting}<span class="spin"></span>{:else}<Icon name="play" size={14} />{/if}
-      Start
-    </button>
+    <span class="t3 small">Runs detached on {app.device(device)?.name}; it keeps going if you close the app.</span>
+    <button class="btn primary" disabled={starting || !message.trim() || !cwd.trim()}>
+      {#if starting}<Bits kind="spinner" size={11} />{:else}<Icon name="play" size={12} />{/if} Start <span class="kbd dark">Ctrl ↵</span></button>
   </div>
 </form>
 
@@ -104,184 +105,96 @@
   .scrim {
     position: fixed;
     inset: 0;
-    background: rgba(3, 3, 8, 0.6);
-    backdrop-filter: blur(3px);
     z-index: 40;
+    background: rgba(0, 0, 0, 0.5);
   }
   .sheet {
     position: fixed;
     z-index: 41;
     left: 50%;
-    top: 9vh;
+    top: 10vh;
     transform: translateX(-50%);
     width: min(640px, 92vw);
-    padding: 22px 24px;
+    background: var(--surface);
+    border-color: var(--line-2);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    background: #10101c;
-    border-color: var(--line-2);
-    box-shadow: 0 40px 120px -20px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(141, 125, 255, 0.12);
   }
   .head {
     display: flex;
     align-items: center;
+    padding: 12px 14px 12px 18px;
+    border-bottom: 1px solid var(--line);
   }
   h2 {
-    margin: 0;
-    font-size: 19px;
+    font-size: 14px;
+  }
+  .grow {
     flex: 1;
   }
-  .x {
-    border: 0;
-    background: none;
-    color: var(--dim);
-  }
-  label {
+  .body {
+    padding: 14px 18px;
     display: flex;
     flex-direction: column;
-    gap: 7px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--dim);
-    letter-spacing: 0.02em;
+    gap: 14px;
   }
-  .pills {
+  .field {
     display: flex;
+    flex-direction: column;
     gap: 6px;
+  }
+  .segs {
+    display: flex;
     flex-wrap: wrap;
+    gap: 6px;
   }
-  .pill {
-    padding: 6px 12px;
-    border-radius: 99px;
+  .segs button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: var(--r-sm);
     border: 1px solid var(--line-2);
-    background: var(--panel);
-    color: var(--dim);
-    font-weight: 500;
-    transition: all 0.2s;
+    background: var(--bg);
+    color: var(--text-2);
   }
-  .pill.sel {
-    background: var(--grad-soft);
-    border-color: rgba(141, 125, 255, 0.45);
+  .segs button:hover:not(:disabled) {
     color: var(--text);
   }
-  .agents {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
+  .segs button.on {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--accent-soft);
   }
-  .agent-card {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 3px;
-    padding: 11px;
-    border-radius: 12px;
-    border: 1px solid var(--line);
-    background: var(--panel);
-    text-align: left;
-    transition: all 0.25s var(--ease);
-  }
-  .agent-card:hover:not(:disabled) {
-    transform: translateY(-2px);
-    border-color: var(--line-2);
-  }
-  .agent-card.sel {
-    border-color: color-mix(in srgb, var(--c) 60%, transparent);
-    background: color-mix(in srgb, var(--c) 9%, transparent);
-    box-shadow: 0 8px 26px -12px color-mix(in srgb, var(--c) 70%, transparent);
-  }
-  .agent-card:disabled {
+  .segs button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
-  .mark {
-    width: 24px;
-    height: 24px;
-    border-radius: 7px;
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    font-size: 12px;
-    color: var(--c);
-    background: color-mix(in srgb, var(--c) 16%, transparent);
-    margin-bottom: 4px;
-  }
-  .aname {
-    font-weight: 650;
-    color: var(--text);
-    font-size: 13px;
-  }
-  .aver {
-    font-weight: 400;
-    color: var(--faint);
-    font-size: 11px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
   .two {
     display: grid;
-    grid-template-columns: 1fr 200px;
-    gap: 12px;
-  }
-  input,
-  textarea {
-    padding: 9px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-    background: rgba(0, 0, 0, 0.3);
-    outline: none;
-    font-weight: 400;
-    color: var(--text);
-    transition: border-color 0.2s, box-shadow 0.2s;
+    grid-template-columns: 1fr 180px;
+    gap: 10px;
   }
   textarea {
-    resize: vertical;
-    font-size: 14px;
-  }
-  input:focus,
-  textarea:focus {
-    border-color: rgba(141, 125, 255, 0.5);
-    box-shadow: 0 0 0 3px rgba(141, 125, 255, 0.14);
+    font-size: 13px;
   }
   .foot {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    padding: 12px 18px;
+    border-top: 1px solid var(--line);
   }
-  .hint {
+  .foot .t3 {
     flex: 1;
+  }
+  .small {
     font-size: 12px;
   }
-  .go {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 22px;
-    border: 0;
-    border-radius: 11px;
-    background: var(--grad);
-    color: #0b0b14;
-    font-weight: 700;
-    transition: transform 0.2s var(--spring);
-  }
-  .go:hover:not(:disabled) {
-    transform: translateY(-1px) scale(1.02);
-  }
-  .go:disabled {
-    opacity: 0.4;
-  }
-  .spin {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: 2px solid rgba(0, 0, 0, 0.2);
-    border-top-color: #0b0b14;
-    animation: r 0.7s linear infinite;
-  }
-  @keyframes r {
-    to { transform: rotate(360deg); }
+  .kbd.dark {
+    border-color: rgba(0, 0, 0, 0.25);
+    color: var(--accent-ink);
   }
 </style>
