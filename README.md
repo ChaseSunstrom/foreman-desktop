@@ -19,7 +19,7 @@ A desktop app for [Foreman](https://github.com/ChaseSunstrom/foreman): every pro
 The app is a client of Foreman's own CLI. It never talks to a daemon:
 
 - On this machine it runs `~/.claude/foreman/plugin/bin/fm … --json` directly. On other devices it runs the same command over `ssh`, with one shared connection per host.
-- It keeps one live stream per device (`fm projects --follow`, `fm session list --follow`), plus one for the project or session you have open.
+- It keeps three live streams per device (`fm projects --follow`, `fm session list --follow`, `fm claude list --follow`), plus one for the project or session you have open.
 - Nothing listens on a new port. Who can reach a device is decided by your ssh keys or Tailscale ACLs.
 - An unknown host key stops the connection. The Devices page shows the device's fingerprints, and they're trusted only when you click; a key that changes later is refused.
 - Shared-connection sockets live in `$XDG_RUNTIME_DIR` or `~/.ssh`, never a shared `/tmp`. The Rust side runs only the `fm` commands the app uses.
