@@ -2,11 +2,17 @@
 
 A desktop app for [Foreman](https://github.com/ChaseSunstrom/foreman): every project, agent session and device in one animated window. It runs on Tauri 2 (Rust) with Svelte 5.
 
-- **Overview**: active work across all devices, how many sessions are running, and what's waiting on you.
-- **Projects**: the active task with its stage, steps, criteria and audits; the queue and inbox (start, drop, approve a plan, capture an idea); drive and autonomy switches; the last gate run; and recent activity. All of it updates live.
-- **Sessions**: start, watch, message and stop sessions for Claude Code, Codex, Gemini CLI or opencode, on any device. Tool calls stream in as they run, each paired with its result. Sessions run detached, so they keep going when you close the app.
-- **Agents**: which agent CLIs each device has, and whether Foreman's rules are wired into them.
-- **Devices**: this machine plus any you add over ssh. Your tailnet's machines are suggested automatically.
+- **Home**: what's waiting on you, the tasks in progress on every device, and live and recent sessions.
+- **Projects**: the active task with its stage, steps, criteria and audits. Every queue, inbox and blocked item is listed, with search, type filters and the full brief, and you can start, drop, approve a plan or capture an idea. Drive and autonomy switches, the last gate run and recent activity are here too, all updating live.
+- **Sessions**: every Claude Code session on every device (terminal, Remote Control, headless) next to the ones Foreman started. Each one has:
+  - its conversation (Markdown, tool calls with their output, pasted and tool-returned images);
+  - its subagents and their transcripts;
+  - its scratchpad files and a picture gallery.
+
+  Message any session: Foreman sessions take the next turn; a Claude session is continued headlessly by its own id, as a fork while its terminal is still open.
+- **Remote control**: the `claude remote-control` units on each device (`fm serve`). Serve a project, stop a unit, or see why one died.
+- **Agents** and **Devices**: which agents each device has, whether Foreman's rules are wired into them, your tailnet's machines, and an explicit fingerprint check before any device is trusted.
+- **Ctrl+K** jumps to any project, session, page or action; **Ctrl+N** starts a session.
 
 ## How it works
 
@@ -36,6 +42,6 @@ cd src-tauri && cargo test                # the transport: quoting, host checks,
 Optional environment variables:
 
 - `FOREMAN_HOME`: where Foreman lives, if not `~/.claude/foreman`.
-- `FOREMAN_DESKTOP_VIEW=sessions|agents|devices|new|project:<slug>|session:<id>`: the page to open first.
+- `FOREMAN_DESKTOP_VIEW=sessions|remote|agents|devices|new|palette|project:<slug>[:tab]|session:<id>|claude:<id>`: the page to open first.
 
 On Wayland with NVIDIA, the app sets `__NV_DISABLE_EXPLICIT_SYNC=1` itself, which is the fix Tauri recommends for WebKitGTK's "Error 71".
