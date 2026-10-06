@@ -1,5 +1,7 @@
 # Foreman Desktop
 
+[![CI](https://github.com/ChaseSunstrom/foreman-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/ChaseSunstrom/foreman-desktop/actions/workflows/ci.yml)
+
 A desktop app for [Foreman](https://github.com/ChaseSunstrom/foreman): every project, agent session and device in one animated window. It runs on Tauri 2 (Rust) with Svelte 5.
 
 - **Home**: what's waiting on you (a yes to give, or tasks blocked on something only you can do), the tasks in progress on every device, and live and recent sessions.
@@ -25,6 +27,10 @@ The app is a client of Foreman's own CLI. It never talks to a daemon:
 - Nothing listens on a new port. Who can reach a device is decided by your ssh keys or Tailscale ACLs.
 - An unknown host key stops the connection. The Devices page shows the device's fingerprints, and they're trusted only when you click; a key that changes later is refused.
 - Shared-connection sockets live in `$XDG_RUNTIME_DIR` or `~/.ssh`, never a shared `/tmp`. The Rust side runs only the `fm` commands the app uses.
+
+## Install
+
+Download the AppImage, deb or rpm (Linux) or the universal dmg (macOS) from [Releases](https://github.com/ChaseSunstrom/foreman-desktop/releases), or build it yourself (below). Each tag `v*` builds a release; every push runs the type-check and the transport tests.
 
 ## Requirements
 
