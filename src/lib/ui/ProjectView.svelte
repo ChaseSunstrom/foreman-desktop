@@ -140,14 +140,14 @@
                   {#each a.criteria as c (c.n)}
                     <li class:ok={c.checked}>
                       <span class="box">{#if c.checked}<Icon name="check" size={10} stroke={2.8} />{/if}</span>
-                      <div>{c.text}{#if c.verify}<div class="mono t3 verify ellipsis" title={c.verify}>{c.verify}</div>{/if}</div>
+                      <div title={c.verify ? `checked by: ${c.verify}` : undefined}>{c.text}</div>
                     </li>
                   {/each}
                 </ul>
               {/if}
               <div class="tfoot t3">
                 <span><Icon name="shield" size={12} /> audits {a.audits.done}/{a.audits.need}</span>
-                {#each a.blockers.slice(0, 3) as b}<span class="blocker ellipsis" title={b}>{b}</span>{/each}
+                {#if a.blockers.length}<span title={a.blockers.join("\n")}>{a.blockers.length} left before it can close</span>{/if}
               </div>
             </section>
           {:else}
@@ -156,13 +156,14 @@
 
           {#if plans.length}
             <section class="panel plans">
-              <div class="label">Plans waiting for your yes</div>
+              <div class="label">Waiting for your yes</div>
               {#each plans as i (i.id)}
                 <div class="plan">
                   <div class="trow"><Bits kind="type" type={i.type} tier={i.tier} /><span class="mono t3">{i.id}</span><span class="ellipsis">{i.title}</span></div>
-                  <p><b>Interpretation</b> {i.plan!.interpretation}</p>
-                  <p><b>Approach</b> {i.plan!.approach}</p>
-                  <button class="btn primary" disabled={busy[`a${i.id}`]} onclick={() => approve(i)}><Icon name="check" size={13} /> Approve plan</button>
+                  {#if i.plan?.interpretation?.trim()}<p><b>Interpretation</b> {i.plan.interpretation}</p>{/if}
+                  {#if i.plan?.approach?.trim()}<p><b>Approach</b> {i.plan.approach}</p>{/if}
+                  <button class="btn" disabled={busy[`a${i.id}`]} onclick={() => approve(i)}><Icon name="check" size={13} />
+                    {i.plan?.approach?.trim() ? "Approve plan" : "Go ahead"}</button>
                 </div>
               {/each}
             </section>
@@ -170,7 +171,7 @@
         </div>
 
         <div class="col side">
-          {#if v.next}<section class="panel pad"><div class="label">Next</div><div class="next">{v.next}</div></section>{/if}
+          {#if v.next}<section class="panel pad"><div class="label">Next</div><div class="next">{v.next.split(" — ")[0]}</div></section>{/if}
           <section class="panel pad facts">
             <div><span class="t3">Autonomy</span><span>{v.mode?.autonomy}</span></div>
             <div><span class="t3">Drive</span><span>{v.mode?.drive ? "on" : "off"}</span></div>
@@ -412,10 +413,6 @@
     border-color: var(--ok);
     color: #0c1a12;
   }
-  .verify {
-    font-size: 11px;
-    max-width: 560px;
-  }
   .tfoot {
     display: flex;
     gap: 14px;
@@ -428,10 +425,6 @@
     display: inline-flex;
     gap: 5px;
     align-items: center;
-  }
-  .blocker {
-    color: var(--warn);
-    max-width: 220px;
   }
   .plans {
     padding: 12px 14px;
