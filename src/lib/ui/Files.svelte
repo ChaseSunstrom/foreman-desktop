@@ -9,6 +9,8 @@
   let { device, sid, onimage }: { device: Device; sid: string; onimage?: (src: string) => void } = $props();
   let root = $state("");
   let files = $state<ScratchFile[] | null>(null);
+  let truncated = $state(false);
+  let all = $state(false);
   let err = $state<string | null>(null);
   let q = $state("");
   let sel = $state<ScratchFile | null>(null);
@@ -16,15 +18,17 @@
 
   async function load() {
     try {
-      const o = await fm<{ root: string; files: ScratchFile[] }>(device, ["claude", "files", sid, "--json"]);
+      const o = await fm<{ root: string; files: ScratchFile[]; truncated: boolean }>(device, ["claude", "files", sid, "--json"]);
       root = o.root;
+      truncated = o.truncated;
       files = o.files.sort((a, b) => b.mtime - a.mtime);
     } catch (e) {
       err = String(e);
     }
   }
   onMount(load);
-  const shown = $derived((files ?? []).filter((f) => !q || f.path.toLowerCase().includes(q.toLowerCase())).slice(0, 500));
+  const matching = $derived((files ?? []).filter((f) => !q || f.path.toLowerCase().includes(q.toLowerCase())));
+  const shown = $derived(all ? matching : matching.slice(0, 500));
 
   async function pick(f: ScratchFile) {
     sel = f;
@@ -60,6 +64,8 @@
             <span class="t3 small age">{ago(f.mtime * 1000)}</span>
           </button>
         {:else}<div class="empty">{files.length ? "No match." : "This session's scratchpad is empty."}</div>{/each}
+        {#if matching.length > shown.length}<button class="btn ghost more" onclick={() => (all = true)}>Show all {matching.length}</button>{/if}
+        {#if truncated}<div class="t3 small note">Listing stops at 2000 files; filter to find others.</div>{/if}
       {/if}
     </div>
   </div>
@@ -132,6 +138,12 @@
   .age {
     width: 26px;
     text-align: right;
+  }
+  .more {
+    margin: 8px 12px;
+  }
+  .note {
+    padding: 4px 12px 10px;
   }
   .preview {
     min-width: 0;

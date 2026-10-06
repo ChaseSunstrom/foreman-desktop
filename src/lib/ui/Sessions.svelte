@@ -12,7 +12,7 @@
   let q = $state("");
 
   const filters = [
-    { id: "all", label: "All" },
+    { id: "all", label: "All" }, // everything but headless SDK runs, which have their own filter
     { id: "live", label: "Live" },
     { id: "terminal", label: "Terminal" },
     { id: "foreman", label: "Foreman" },
@@ -21,6 +21,7 @@
 
   const rows = $derived(
     app.sessions.filter((s) => {
+      if (filter !== "headless" && s.kind === "headless") return false;
       if (filter === "live" && !s.live) return false;
       if (filter === "terminal" && !(s.source === "claude" && (s.kind === "terminal" || s.kind === "remote"))) return false;
       if (filter === "foreman" && s.source !== "fm") return false;

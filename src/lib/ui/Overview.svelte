@@ -11,8 +11,9 @@
   );
   const active = $derived(projects.filter((p) => p.active).sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)));
   const waiting = $derived(projects.filter((p) => p.waits > 0));
-  const liveSessions = $derived(app.sessions.filter((s) => s.live));
-  const recent = $derived(app.sessions.filter((s) => !s.live).slice(0, 8));
+  const people = $derived(app.sessions.filter((s) => s.kind !== "headless"));
+  const liveSessions = $derived(people.filter((s) => s.live));
+  const recent = $derived(people.filter((s) => !s.live).slice(0, 8));
   const open = (device: string, slug: string, tab?: string) => (app.view = { kind: "project", device, slug, tab });
 </script>
 

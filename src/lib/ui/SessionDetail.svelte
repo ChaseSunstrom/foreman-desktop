@@ -23,6 +23,7 @@
   let sending = $state(false);
   let lightbox = $state<string | null>(null);
   let main: Stream | null = null;
+  let whole = $state(false); // the last 4000 transcript lines first; the whole history on request
   let sub: Stream | null = null;
 
   const d = $derived(app.device(s.device)!);
@@ -46,14 +47,14 @@
   }
 
   $effect(() => {
-    const id = s.id, src = s.source;
+    const id = s.id, src = s.source, all = whole;
     untrack(() => {
       main?.stop();
       events = [];
       err = null;
-      tab = "chat";
+      if (!all) tab = "chat";
       agentSel = null;
-      main = stream(src === "claude" ? ["claude", "show", id, "--follow"] : ["session", "tail", id, "--follow"],
+      main = stream(src === "claude" ? ["claude", "show", id, "--follow", ...(all ? [] : ["--from", "-4000"])] : ["session", "tail", id, "--follow"],
         (e) => (events = e), () => events, (e) => (err = e));
       if (src === "claude") loadAgents();
     });
@@ -89,7 +90,7 @@
       const out = await app.act<{ id: string; forked: boolean }>(s.device, ["claude", "send", "--json", s.id, "--", text]);
       if (out && typeof out === "object") {
         draft = "";
-        app.toast("ok", out.forked ? "Continuing in a forked headless session" : "Continuing headlessly", {
+        app.toast("ok", "Continuing in a forked headless session", {
           label: "Open", run: () => (app.view = { kind: "sessions", device: s.device, id: out.id, source: "fm" }),
         });
       }
@@ -101,7 +102,8 @@
     if (await app.act(s.device, ["session", "rm", s.id, "--json"], "Session removed")) app.view = { kind: "sessions" };
   }
   function copyResume() {
-    navigator.clipboard?.writeText(`cd ${JSON.stringify(s.cwd)} && claude --resume ${s.id}`);
+    const q = (v: string) => `'${v.replace(/'/g, `'\\''`)}'`; // single quotes: nothing in the path is expanded
+    navigator.clipboard?.writeText(`cd ${q(s.cwd)} && claude --resume ${s.id}`);
     app.toast("info", "Resume command copied");
   }
   const busy = $derived(!claude && s.live);
@@ -137,6 +139,9 @@
 
   {#if err && !events.length}<div class="errbar">{err}</div>{/if}
 
+  {#if tab === "chat" && claude && !whole && (events[0]?.n ?? 0) > 0}
+    <button class="btn ghost history" onclick={() => (whole = true)}>Showing the latest part · load the full history</button>
+  {/if}
   {#if tab === "chat"}
     <Transcript {events} device={d} sid={s.id} source={s.source} {busy} onimage={(src) => (lightbox = src)} />
   {:else if tab === "agents"}
@@ -222,6 +227,11 @@
   }
   .tabs {
     flex: none;
+  }
+  .history {
+    align-self: center;
+    margin-top: 6px;
+    font-size: 12px;
   }
   .errbar {
     padding: 8px 20px;

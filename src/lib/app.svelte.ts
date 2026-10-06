@@ -100,7 +100,7 @@ class App {
     this.streams.set(d.id, [
       live(d, ["projects", "--json", "--follow"], (o) => put("projects", o.projects ?? []), set("projects")),
       live(d, ["session", "list", "--json", "--follow"], (o) => this.sessionsChanged(d, o.sessions ?? []), set("sessions")),
-      live(d, ["claude", "list", "--json", "--follow"], (o) => put("claude", o.sessions ?? []), set("claude")),
+      live(d, ["claude", "list", "--all", "--limit", "400", "--json", "--follow"], (o) => put("claude", o.sessions ?? []), set("claude")),
     ]);
     fm<{ agents: AgentRow[] }>(d, ["session", "agents", "--json"])
       .then((o) => put("agents", o.agents))
@@ -187,8 +187,9 @@ class App {
     return out.sort((a, b) => Number(b.live) - Number(a.live) || b.updated - a.updated);
   }
 
+  /** Live sessions a person is in or Foreman started (headless SDK runs, like a background review, don't count). */
   get running() {
-    return this.sessions.filter((s) => s.live).length;
+    return this.sessions.filter((s) => s.live && s.kind !== "headless").length;
   }
 
   get waiting() {
