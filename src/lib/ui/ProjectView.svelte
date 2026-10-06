@@ -17,6 +17,7 @@
   let err = $state<string | null>(null);
   let busy = $state<Record<string, boolean>>({});
   let decisions = $state<Decision[] | null>(null);
+  let review = $state<{ digest: string; friction: { since?: string; sections: Record<string, string[]> } } | null>(null);
   let stream: Stream | null = null;
   let refetch: ReturnType<typeof setTimeout> | null = null;
 
@@ -46,6 +47,7 @@
     { id: "inbox", label: "Inbox", n: full?.inbox.length ?? v?.inbox_total ?? 0 },
     { id: "blocked", label: "Blocked", n: full?.blocked.length ?? 0 },
     { id: "decisions", label: "Decisions", n: null },
+    { id: "review", label: "Review", n: null },
     { id: "activity", label: "Activity", n: null },
     { id: "gates", label: "Gates", n: null },
   ]);
@@ -60,6 +62,14 @@
     if (tab !== "decisions") return;
     const d = untrack(() => app.device(device));
     if (d) fm<{ rows: Decision[] }>(d, ["-p", slug, "decide", "--list", "--json"]).then((o) => (decisions = [...(o.rows ?? [])].reverse())).catch(() => (decisions = []));
+  });
+  // what got done this week, and what got in the way since the last self-improvement pass
+  $effect(() => {
+    if (tab !== "review") return;
+    const d = untrack(() => app.device(device));
+    if (!d) return;
+    Promise.all([fm<string>(d, ["-p", slug, "digest"]).catch(() => ""), fm<any>(d, ["-p", slug, "friction", "--json"]).catch(() => null)])
+      .then(([digest, friction]) => (review = { digest: typeof digest === "string" ? digest : "", friction: friction?.sections ? friction : { sections: {} } }));
   });
   const approve = (i: Item) => act(`a${i.id}`, ["task", "set", i.id, "approved=true", "--json"], `${i.id} approved`);
   const mins = (s: number | null | undefined) => (s == null ? null : s < 3600 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`);
@@ -199,6 +209,21 @@
             {#if d.why}<div class="t3 why">{d.why}</div>{/if}
           </div>
         {:else}{#if decisions}<div class="empty">No decisions recorded (fm decide).</div>{/if}{/each}
+      </div>
+    {:else if tab === "review"}
+      <div class="list review" in:fade={{ duration: 120 }}>
+        {#if !review}<div class="empty">Loading…</div>{:else}
+          <div class="label rh">This week</div>
+          {#each review.digest.split("\n").filter((l) => l.trim()) as l}
+            {#if l.startsWith("- ")}<div class="line rl ellipsis" title={l.slice(2)}>{l.slice(2)}</div>
+            {:else}<div class="rsub">{l}</div>{/if}
+          {:else}<div class="empty">Nothing this week.</div>{/each}
+          <div class="label rh">Since the last self-improvement pass{review.friction.since ? ` (${review.friction.since.slice(0, 10)})` : ""}</div>
+          {#each Object.entries(review.friction.sections) as [title, lines]}
+            <div class="rsub">{title}</div>
+            {#each lines as l}<div class="line rl ellipsis" title={l}>{l}</div>{/each}
+          {:else}<div class="empty">No friction recorded.</div>{/each}
+        {/if}
       </div>
     {:else if tab === "activity"}
       <div class="list" in:fade={{ duration: 120 }}>
@@ -491,6 +516,21 @@
   }
   .dec {
     padding: 9px 0;
+  }
+  .review .rh {
+    margin: 18px 0 6px;
+  }
+  .review .rh:first-child {
+    margin-top: 6px;
+  }
+  .review .rsub {
+    padding: 10px 0 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .review .rl {
+    padding: 4px 0;
   }
   .dec .date {
     flex: none;

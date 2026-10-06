@@ -3,7 +3,7 @@
 A desktop app for [Foreman](https://github.com/ChaseSunstrom/foreman): every project, agent session and device in one animated window. It runs on Tauri 2 (Rust) with Svelte 5.
 
 - **Home**: what's waiting on you (a yes to give, or tasks blocked on something only you can do), the tasks in progress on every device, and live and recent sessions.
-- **Projects**: the active task with its stage, steps, criteria and audits. Every queue, inbox and blocked item is listed, with search, type filters and the full brief, and you can start, drop, approve a plan or capture an idea. Drive and autonomy switches, the last gate run and recent activity are here too, all updating live. A Decisions tab lists what was decided along the way, newest first. Costly and outward decisions made without asking are flagged for your review.
+- **Projects**: the active task with its stage, steps, criteria and audits. Every queue, inbox and blocked item is listed, with search, type filters and the full brief, and you can start, drop, approve a plan or capture an idea. Drive and autonomy switches, the last gate run and recent activity are here too, all updating live. A Decisions tab lists what was decided along the way, newest first. Costly and outward decisions made without asking are flagged for your review. A Review tab shows the week's digest (what got done, lessons, decisions to review, blocked work) and the friction since Foreman's last self-improvement pass.
 - **Sessions**: every Claude Code session on every device (terminal, Remote Control, headless) next to the ones Foreman started. Each one has:
   - its conversation (Markdown, tool calls with their output, pasted and tool-returned images);
   - its subagents and their transcripts;
