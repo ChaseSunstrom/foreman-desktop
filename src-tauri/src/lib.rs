@@ -75,12 +75,25 @@ fn dirs_home() -> std::path::PathBuf {
     std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_else(|| "/".into())
 }
 
+/// Where ssh's shared-connection sockets live: the user's runtime dir, else ~/.ssh — never a shared /tmp, where
+/// another local user could plant a socket at the predictable path and see (or answer) every command.
+pub fn control_dir(xdg_runtime: Option<std::ffi::OsString>, home: &std::path::Path) -> std::path::PathBuf {
+    match xdg_runtime.filter(|d| !d.is_empty()) {
+        Some(d) => d.into(),
+        None => home.join(".ssh"),
+    }
+}
+
 fn ssh_opts() -> Vec<String> {
-    let run = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| std::env::temp_dir().display().to_string());
+    let dir = control_dir(std::env::var_os("XDG_RUNTIME_DIR"), &dirs_home());
+    if !dir.exists() {
+        use std::os::unix::fs::DirBuilderExt;
+        let _ = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir);
+    }
     [
         "BatchMode=yes",
-        // a device added in the app is trusted on first connect; a host key that later changes is still refused
-        "StrictHostKeyChecking=accept-new",
+        // an unknown host key fails; the Devices page shows its fingerprint and the user trusts it (host_key_trust)
+        "StrictHostKeyChecking=yes",
         "ConnectTimeout=8",
         "ServerAliveInterval=20",
         "ControlMaster=auto",
@@ -88,12 +101,31 @@ fn ssh_opts() -> Vec<String> {
     ]
     .iter()
     .flat_map(|o| ["-o".to_string(), o.to_string()])
-    .chain(["-o".to_string(), format!("ControlPath={run}/fm-desktop-%C")])
+    .chain(["-o".to_string(), format!("ControlPath={}/fm-desktop-%C", dir.display())])
     .collect()
+}
+
+/// The fm commands the app runs; anything else is refused before it reaches a device (defence in depth: the
+/// page has no remote content, but a webview bug must not turn into `fm trust on` or `fm uninstall-user`).
+const ALLOWED: &[&str] = &["projects", "ui", "session", "capture", "focus", "drive", "autonomy", "agents", "claude",
+    "serve", "state", "queue", "next", "task"];
+const ALLOWED_TASK: &[&str] = &["drop", "set", "show", "log"];
+
+pub fn allowed(args: &[String]) -> Result<(), String> {
+    let mut i = 0;
+    while i < args.len() && args[i] == "-p" {
+        i += 2; // the project flag and its value come first
+    }
+    let cmd = args.get(i).map(String::as_str).unwrap_or("");
+    let ok = ALLOWED.contains(&cmd)
+        && (cmd != "task" || args.get(i + 1).is_some_and(|a| ALLOWED_TASK.contains(&a.as_str())))
+        && (cmd != "serve" || args.get(i + 1).is_some_and(|a| ["status", "start", "stop"].contains(&a.as_str())));
+    if ok { Ok(()) } else { Err(format!("the app doesn't run `fm {}`", args[i.min(args.len())..].join(" "))) }
 }
 
 /// The fm command for a device; `stream`: a long-lived one that ends when its stdin closes (remote only).
 pub fn command(dev: &Device, args: &[String], stream: bool) -> Result<Command, String> {
+    allowed(args)?;
     let remote = remote_host(dev).is_some();
     let mut c = match remote_host(dev) {
         None => {
@@ -143,6 +175,25 @@ impl Streams {
             let _ = tx.send(());
         }
     }
+}
+
+/// Read a pipe to its end (a child blocked on a full stderr pipe would never exit) and keep only its last `cap`
+/// bytes, for the error message.
+pub async fn drain_tail<R: tokio::io::AsyncRead + Unpin>(r: &mut R, cap: usize) -> String {
+    let mut tail: Vec<u8> = Vec::new();
+    let mut chunk = vec![0u8; 8192];
+    loop {
+        match r.read(&mut chunk).await {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                tail.extend_from_slice(&chunk[..n]);
+                if tail.len() > cap {
+                    tail.drain(..tail.len() - cap);
+                }
+            }
+        }
+    }
+    String::from_utf8_lossy(&tail).trim().to_string()
 }
 
 /// Lines longer than this are dropped (a misbehaving device can't grow the app's memory without bound).
@@ -196,11 +247,7 @@ async fn fm_stream(
     streams.stop.lock().unwrap().insert(id, tx);
     let registry = streams.stop.clone();
     tauri::async_runtime::spawn(async move {
-        let err_task = tauri::async_runtime::spawn(async move {
-            let mut buf = Vec::new();
-            let _ = (&mut stderr).take(16 * 1024).read_to_end(&mut buf).await;
-            String::from_utf8_lossy(&buf).trim().to_string()
-        });
+        let err_task = tauri::async_runtime::spawn(async move { drain_tail(&mut stderr, 16 * 1024).await });
         let mut out = BufReader::new(stdout);
         loop {
             tokio::select! {
@@ -265,6 +312,80 @@ pub fn parse_peers(json: &[u8]) -> Vec<Peer> {
     peers
 }
 
+#[derive(Serialize, Debug, PartialEq)]
+pub struct HostKey {
+    /// e.g. "256 SHA256:abc… (ED25519)", what the user compares
+    fingerprint: String,
+    /// the known_hosts line it would add
+    line: String,
+}
+
+/// `ssh -G host`: the real host name and port behind an alias (ssh-keyscan doesn't read ~/.ssh/config).
+pub fn resolve_target(ssh_g: &str) -> Option<(String, String)> {
+    let get = |k: &str| ssh_g.lines().find_map(|l| l.strip_prefix(k).map(|v| v.trim().to_string()));
+    Some((get("hostname ")?, get("port ").unwrap_or_else(|| "22".into())))
+}
+
+/// A known_hosts line for exactly this host and port, nothing else ("host type base64" / "[host]:port type base64").
+pub fn key_line_ok(line: &str, host: &str, port: &str) -> bool {
+    let want = if port == "22" { host.to_string() } else { format!("[{host}]:{port}") };
+    let parts: Vec<&str> = line.split_whitespace().collect();
+    parts.len() == 3
+        && parts[0] == want
+        && parts[1].starts_with(|c: char| c.is_ascii_alphanumeric())
+        && parts[1].chars().all(|c| c.is_ascii_alphanumeric() || "-@.".contains(c))
+        && parts[2].chars().all(|c| c.is_ascii_alphanumeric() || "+/=".contains(c))
+}
+
+async fn target(host: &str) -> Result<(String, String), String> {
+    valid_host(host)?;
+    let g = Command::new("ssh").args(["-G", "--", host]).output().await.map_err(|e| format!("can't run ssh: {e}"))?;
+    let (h, port) = resolve_target(&String::from_utf8_lossy(&g.stdout)).ok_or("ssh -G gave no host name")?;
+    valid_host(&h)?;
+    Ok((h, port))
+}
+
+/// The keys a device presents, with fingerprints, for the user to compare before trusting it.
+#[tauri::command]
+async fn host_key_scan(host: String) -> Result<Vec<HostKey>, String> {
+    let (h, port) = target(&host).await?;
+    let scan = Command::new("ssh-keyscan").args(["-T", "6", "-p", &port, &h]).output().await
+        .map_err(|e| format!("can't run ssh-keyscan: {e}"))?;
+    let mut keys = vec![];
+    for line in String::from_utf8_lossy(&scan.stdout).lines().filter(|l| key_line_ok(l, &h, &port)) {
+        let mut fp = Command::new("ssh-keygen").args(["-lf", "-"]).stdin(Stdio::piped()).stdout(Stdio::piped())
+            .spawn().map_err(|e| format!("can't run ssh-keygen: {e}"))?;
+        use tokio::io::AsyncWriteExt;
+        fp.stdin.take().ok_or("no stdin")?.write_all(format!("{line}\n").as_bytes()).await.map_err(|e| e.to_string())?;
+        let out = fp.wait_with_output().await.map_err(|e| e.to_string())?;
+        let f = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let parts: Vec<&str> = f.split_whitespace().collect();
+        if parts.len() >= 2 {
+            keys.push(HostKey { fingerprint: format!("{} {} {}", parts[0], parts[1], parts.last().unwrap()), line: line.into() });
+        }
+    }
+    if keys.is_empty() { Err(format!("{h} didn't present a host key (is ssh running there?)")) } else { Ok(keys) }
+}
+
+/// Trust the keys the user just compared: append them to ~/.ssh/known_hosts (each checked again here).
+#[tauri::command]
+async fn host_key_trust(host: String, lines: Vec<String>) -> Result<(), String> {
+    let (h, port) = target(&host).await?;
+    if lines.is_empty() || !lines.iter().all(|l| key_line_ok(l, &h, &port)) {
+        return Err("those aren't this device's host keys".into());
+    }
+    let ssh = dirs_home().join(".ssh");
+    use std::os::unix::fs::DirBuilderExt;
+    let _ = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&ssh);
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(ssh.join("known_hosts"))
+        .map_err(|e| format!("can't write known_hosts: {e}"))?;
+    for l in lines {
+        writeln!(f, "{l}").map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// This machine's name, for the local device's label.
 #[tauri::command]
 fn this_host() -> String {
@@ -299,7 +420,8 @@ pub fn run() {
                 webview.app_handle().state::<Streams>().stop_all();
             }
         })
-        .invoke_handler(tauri::generate_handler![fm, fm_stream, fm_stream_stop, tailscale_peers, this_host, initial_view])
+        .invoke_handler(tauri::generate_handler![fm, fm_stream, fm_stream_stop, tailscale_peers, this_host, initial_view,
+            host_key_scan, host_key_trust])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -334,6 +456,53 @@ mod tests {
         let out = std::process::Command::new("sh").args(["-c", &line]).env("FOREMAN_HOME", &dir).output().unwrap();
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(String::from_utf8_lossy(&out.stdout), "capture|it's $HOME `x` ; done|");
+    }
+
+    #[test]
+    fn control_sockets_stay_private() {
+        let home = std::path::Path::new("/home/u");
+        assert_eq!(control_dir(None, home), home.join(".ssh"));
+        assert_eq!(control_dir(Some("".into()), home), home.join(".ssh"));
+        assert_eq!(control_dir(Some("/run/user/1000".into()), home), std::path::PathBuf::from("/run/user/1000"));
+        assert!(ssh_opts().iter().all(|o| !o.contains("accept-new")));
+    }
+
+    #[test]
+    fn only_the_apps_own_commands_run() {
+        for ok in [&["projects", "--json"][..], &["-p", "app", "ui", "--json", "--follow"], &["-p", "a", "task", "drop", "T-1", "x"],
+                   &["session", "send", "id", "--", "hi"], &["serve", "status"]] {
+            assert!(allowed(&args(ok)).is_ok(), "{ok:?}");
+        }
+        for bad in [&["trust", "on"][..], &["uninstall-user"], &["doctor", "--repair"], &["-p", "a", "task", "done", "T-1"],
+                    &["serve"], &["-p"], &[], &["run"], &["--json", "projects"]] {
+            assert!(allowed(&args(bad)).is_err(), "{bad:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_chatty_stderr_never_blocks_the_child() {
+        let mut child = Command::new("sh")
+            .args(["-c", "head -c 1000000 /dev/zero | tr '\\0' x >&2; echo END >&2"])
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut err = child.stderr.take().unwrap();
+        let tail = tokio::time::timeout(Duration::from_secs(10), drain_tail(&mut err, 1024)).await.expect("blocked");
+        assert!(tail.ends_with("END") && tail.len() <= 1024);
+        assert!(tokio::time::timeout(Duration::from_secs(5), child.wait()).await.is_ok());
+    }
+
+    #[test]
+    fn host_keys_are_only_this_hosts() {
+        let g = "user chase\nhostname box.ts.net\nport 2222\nidentityfile ~/.ssh/id\n";
+        assert_eq!(resolve_target(g), Some(("box.ts.net".into(), "2222".into())));
+        let line = "[box.ts.net]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMq";
+        assert!(key_line_ok(line, "box.ts.net", "2222"));
+        assert!(!key_line_ok(line, "box.ts.net", "22"));
+        assert!(!key_line_ok("evil.net ssh-ed25519 AAAA", "box.ts.net", "22"));
+        assert!(!key_line_ok("box.ts.net ssh-ed25519 AAAA\n* ssh-rsa BBBB", "box.ts.net", "22"));
+        assert!(!key_line_ok("box.ts.net ssh-ed25519 AAAA extra", "box.ts.net", "22"));
+        assert!(key_line_ok("box.ts.net ecdsa-sha2-nistp256 AAAAE2Vj+/=", "box.ts.net", "22"));
     }
 
     #[tokio::test]
