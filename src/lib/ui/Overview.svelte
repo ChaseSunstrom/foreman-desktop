@@ -10,7 +10,9 @@
     app.devices.flatMap((d) => app.st(d.id).projects.map((p) => ({ ...p, device: d.id, deviceName: d.name }))),
   );
   const active = $derived(projects.filter((p) => p.active).sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0)));
-  const waiting = $derived(projects.filter((p) => p.waits > 0));
+  // what only the user can move: a yes to give, or a task blocked on something (a login, a password, a decision)
+  const waiting = $derived(projects.filter((p) => p.waits > 0 || p.blocked > 0));
+  const blocked = $derived(projects.reduce((n, p) => n + (p.blocked || 0), 0));
   const people = $derived(app.sessions.filter((s) => s.kind !== "headless"));
   const liveSessions = $derived(people.filter((s) => s.live));
   const recent = $derived(people.filter((s) => !s.live).slice(0, 8));
@@ -22,7 +24,8 @@
     <h1>Home</h1>
     <span class="t3 summary">
       {active.length} in progress · {liveSessions.length} live session{liveSessions.length === 1 ? "" : "s"}
-      {#if waiting.length}· <span class="warn">{app.waiting} waiting on you</span>{/if}
+      {#if app.waiting}· <span class="warn">{app.waiting} waiting on you</span>{/if}
+      {#if blocked}· <span class="warn">{blocked} blocked</span>{/if}
     </span>
   </div>
 
@@ -33,12 +36,22 @@
           <div class="label">Waiting on you</div>
           <div class="panel rows">
             {#each waiting as p (p.device + p.project)}
-              <button class="row" onclick={() => open(p.device, p.project, "inbox")}>
-                <Icon name="alert" size={14} />
-                <span class="strong">{base(p.root)}</span>
-                <span class="t3">{p.waits} item{p.waits === 1 ? "" : "s"} need a yes</span>
-                <span class="t3 right">{p.deviceName}</span>
-              </button>
+              {#if p.waits}
+                <button class="row" onclick={() => open(p.device, p.project, "inbox")}>
+                  <Icon name="alert" size={14} />
+                  <span class="strong">{base(p.root)}</span>
+                  <span class="t3">{p.waits} item{p.waits === 1 ? "" : "s"} need a yes</span>
+                  <span class="t3 right">{p.deviceName}</span>
+                </button>
+              {/if}
+              {#if p.blocked}
+                <button class="row" onclick={() => open(p.device, p.project, "blocked")}>
+                  <Icon name="stop" size={13} />
+                  <span class="strong">{base(p.root)}</span>
+                  <span class="t3">{p.blocked} blocked, most on something only you can do</span>
+                  <span class="t3 right">{p.deviceName}</span>
+                </button>
+              {/if}
             {/each}
           </div>
         </section>

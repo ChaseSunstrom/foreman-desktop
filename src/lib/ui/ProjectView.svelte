@@ -3,7 +3,7 @@
   import { fade } from "svelte/transition";
   import { app } from "$lib/app.svelte";
   import { fm, live, type Stream } from "$lib/fm";
-  import { base, type Item, type ProjectState, type ProjectView } from "$lib/types";
+  import { base, type Decision, type Item, type ProjectState, type ProjectView } from "$lib/types";
   import Icon from "./Icon.svelte";
   import Bits from "./Bits.svelte";
   import Switch from "./Switch.svelte";
@@ -16,6 +16,7 @@
   let full = $state<ProjectState | null>(null);
   let err = $state<string | null>(null);
   let busy = $state<Record<string, boolean>>({});
+  let decisions = $state<Decision[] | null>(null);
   let stream: Stream | null = null;
   let refetch: ReturnType<typeof setTimeout> | null = null;
 
@@ -44,6 +45,7 @@
     { id: "queue", label: "Queue", n: full?.queue.length ?? v?.queue?.length ?? 0 },
     { id: "inbox", label: "Inbox", n: full?.inbox.length ?? v?.inbox_total ?? 0 },
     { id: "blocked", label: "Blocked", n: full?.blocked.length ?? 0 },
+    { id: "decisions", label: "Decisions", n: null },
     { id: "activity", label: "Activity", n: null },
     { id: "gates", label: "Gates", n: null },
   ]);
@@ -53,6 +55,12 @@
     await app.act(device, ["-p", slug, ...args], done);
     busy[key] = false;
   }
+  // what was decided along the way, newest first; costly and outward ones are the user's to review
+  $effect(() => {
+    if (tab !== "decisions") return;
+    const d = untrack(() => app.device(device));
+    if (d) fm<{ rows: Decision[] }>(d, ["-p", slug, "decide", "--list", "--json"]).then((o) => (decisions = [...(o.rows ?? [])].reverse())).catch(() => (decisions = []));
+  });
   const approve = (i: Item) => act(`a${i.id}`, ["task", "set", i.id, "approved=true", "--json"], `${i.id} approved`);
   const mins = (s: number | null | undefined) => (s == null ? null : s < 3600 ? `${Math.round(s / 60)}m` : `${(s / 3600).toFixed(1)}h`);
 </script>
@@ -177,6 +185,21 @@
       {:else}
         <div class="empty">Loading…</div>
       {/if}
+    {:else if tab === "decisions"}
+      <div class="list" in:fade={{ duration: 120 }}>
+        {#if decisions === null}<div class="empty">Loading…</div>{/if}
+        {#each decisions ?? [] as d}
+          <div class="line dec" class:rev={d.reversed}>
+            <div class="grow-row">
+              <span class="t3 mono date">{d.date}</span>
+              {#if d.kind}<span class="kind" title="made without asking: yours to review">{d.kind}</span>{/if}
+              <span class="dtext">{d.text}</span>
+              {#if d.reversed}<span class="t3">reversed later</span>{/if}
+            </div>
+            {#if d.why}<div class="t3 why">{d.why}</div>{/if}
+          </div>
+        {:else}{#if decisions}<div class="empty">No decisions recorded (fm decide).</div>{/if}{/each}
+      </div>
     {:else if tab === "activity"}
       <div class="list" in:fade={{ duration: 120 }}>
         {#each [...(v.recent ?? [])].reverse() as r}<div class="line mono">{r}</div>{:else}<div class="empty">No recent activity.</div>{/each}
@@ -465,5 +488,31 @@
   }
   .bad {
     color: var(--bad);
+  }
+  .dec {
+    padding: 9px 0;
+  }
+  .dec .date {
+    flex: none;
+    white-space: nowrap;
+  }
+  .dec .dtext {
+    color: var(--text);
+    font-size: 13px;
+  }
+  .dec .why {
+    margin: 3px 0 0 86px;
+  }
+  .dec.rev .dtext {
+    text-decoration: line-through;
+    color: var(--text-3);
+  }
+  .kind {
+    flex: none;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
   }
 </style>

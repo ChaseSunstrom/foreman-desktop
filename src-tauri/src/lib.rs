@@ -108,7 +108,7 @@ fn ssh_opts() -> Vec<String> {
 /// The fm commands the app runs; anything else is refused before it reaches a device (defence in depth: the
 /// page has no remote content, but a webview bug must not turn into `fm trust on` or `fm uninstall-user`).
 const ALLOWED: &[&str] = &["projects", "ui", "session", "capture", "focus", "drive", "autonomy", "agents", "claude",
-    "serve", "state", "queue", "next", "task"];
+    "serve", "state", "queue", "next", "task", "decide"];
 const ALLOWED_TASK: &[&str] = &["drop", "set", "show", "log"];
 
 pub fn allowed(args: &[String]) -> Result<(), String> {
@@ -119,7 +119,9 @@ pub fn allowed(args: &[String]) -> Result<(), String> {
     let cmd = args.get(i).map(String::as_str).unwrap_or("");
     let ok = ALLOWED.contains(&cmd)
         && (cmd != "task" || args.get(i + 1).is_some_and(|a| ALLOWED_TASK.contains(&a.as_str())))
-        && (cmd != "serve" || args.get(i + 1).is_some_and(|a| ["status", "start", "stop"].contains(&a.as_str())));
+        && (cmd != "serve" || args.get(i + 1).is_some_and(|a| ["status", "start", "stop"].contains(&a.as_str())))
+        // decide only lists (the Decisions tab): recording one is the agent's, never a click's
+        && (cmd != "decide" || args[i + 1..].iter().any(|a| a == "--list" || a == "--review"));
     if ok { Ok(()) } else { Err(format!("the app doesn't run `fm {}`", args[i.min(args.len())..].join(" "))) }
 }
 
@@ -470,11 +472,11 @@ mod tests {
     #[test]
     fn only_the_apps_own_commands_run() {
         for ok in [&["projects", "--json"][..], &["-p", "app", "ui", "--json", "--follow"], &["-p", "a", "task", "drop", "T-1", "x"],
-                   &["session", "send", "id", "--", "hi"], &["serve", "status"]] {
+                   &["session", "send", "id", "--", "hi"], &["serve", "status"], &["-p", "a", "decide", "--list", "--json"]] {
             assert!(allowed(&args(ok)).is_ok(), "{ok:?}");
         }
         for bad in [&["trust", "on"][..], &["uninstall-user"], &["doctor", "--repair"], &["-p", "a", "task", "done", "T-1"],
-                    &["serve"], &["-p"], &[], &["run"], &["--json", "projects"]] {
+                    &["serve"], &["-p"], &[], &["run"], &["--json", "projects"], &["decide", "skip the tests", "--why", "x"]] {
             assert!(allowed(&args(bad)).is_err(), "{bad:?}");
         }
     }

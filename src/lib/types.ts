@@ -3,6 +3,9 @@
 export type Step = { n: number; text: string; done: boolean; current: boolean };
 export type Criterion = { n: number; text: string; verify: string | null; checked: boolean };
 export type Plan = { interpretation: string; approach: string; steps: Step[]; criteria: Criterion[] };
+/** One decisions.md row (fm decide --list --json, T-0341). */
+export type Decision = { date: string; kind: "costly" | "outward" | null; text: string; why: string; reversed: boolean };
+
 export type Item = {
   id: string;
   type: string;

@@ -18,8 +18,9 @@
     }
   });
   const running = (dev: string, agent: string) => app.sessions.filter((s) => s.device === dev && s.agent === agent && s.live).length;
-  async function wire(device: string, key: string) {
-    await app.act(device, ["agents", "install", key, "--json"], `Foreman's rules wired into ${AGENT[key].name}`);
+  async function wire(device: string, key: string, on = true) {
+    await app.act(device, ["agents", on ? "install" : "uninstall", key, "--json"],
+      on ? `Foreman's rules wired into ${AGENT[key].name}` : `Foreman taken out of ${AGENT[key].name}`);
     delete wiring[device];
   }
 </script>
@@ -54,6 +55,8 @@
                 <td class="act">
                   {#if a?.installed && key !== "claude" && !w?.installed}
                     <button class="btn" onclick={() => wire(d.id, key)}>Wire in Foreman</button>
+                  {:else if key !== "claude" && w?.installed}
+                    <button class="btn ghost" title="Take Foreman's hooks, MCP server and rules out of it" onclick={() => wire(d.id, key, false)}>Remove</button>
                   {/if}
                 </td>
               </tr>
