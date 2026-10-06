@@ -71,6 +71,37 @@ fn fm_path() -> std::path::PathBuf {
     home.join("plugin").join("bin").join("fm")
 }
 
+/// The changes a child's environment needs: inside an AppImage, AppRun points PYTHONHOME, PYTHONPATH, PATH,
+/// LD_LIBRARY_PATH… into the image for the app itself, and a system program reading them breaks (fm's python3 found
+/// no standard library). Each variable naming the image loses those entries, or goes when none are left.
+fn host_env(vars: impl Iterator<Item = (String, String)>, appdir: Option<&str>) -> Vec<(String, Option<String>)> {
+    let Some(d) = appdir.filter(|d| !d.is_empty()) else { return vec![] };
+    let inside = |p: &str| std::path::Path::new(p).starts_with(d);
+    vars.filter(|(_, v)| v.split(':').any(inside))
+        .map(|(k, v)| {
+            let kept: Vec<&str> = v.split(':').filter(|p| !p.is_empty() && !inside(p)).collect();
+            (k, (!kept.is_empty()).then(|| kept.join(":")))
+        })
+        .collect()
+}
+
+/// A program as this machine runs it: never with the AppImage's environment (see host_env).
+fn cmd(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    static ENV: std::sync::OnceLock<Vec<(String, Option<String>)>> = std::sync::OnceLock::new();
+    let env = ENV.get_or_init(|| {
+        let appdir = std::env::var("APPIMAGE").ok().and(std::env::var("APPDIR").ok());
+        host_env(std::env::vars(), appdir.as_deref())
+    });
+    let mut c = Command::new(program);
+    for (k, v) in env {
+        match v {
+            Some(v) => c.env(k, v),
+            None => c.env_remove(k),
+        };
+    }
+    c
+}
+
 fn dirs_home() -> std::path::PathBuf {
     std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_else(|| "/".into())
 }
@@ -135,13 +166,13 @@ pub fn command(dev: &Device, args: &[String], stream: bool) -> Result<Command, S
     let remote = remote_host(dev).is_some();
     let mut c = match remote_host(dev) {
         None => {
-            let mut c = Command::new(fm_path());
+            let mut c = cmd(fm_path());
             c.args(args);
             c
         }
         Some(host) => {
             valid_host(host)?;
-            let mut c = Command::new("ssh");
+            let mut c = cmd("ssh");
             let line = if stream { remote_stream_line(args) } else { remote_line(args) };
             c.args(ssh_opts()).arg(host).arg("--").arg(line);
             c
@@ -293,7 +324,7 @@ pub struct Peer {
 /// Tailscale peers, to suggest as devices (an empty list when Tailscale isn't running).
 #[tauri::command]
 async fn tailscale_peers() -> Result<Vec<Peer>, String> {
-    let out = match Command::new("tailscale").args(["status", "--json"]).output().await {
+    let out = match cmd("tailscale").args(["status", "--json"]).output().await {
         Ok(o) if o.status.success() => o.stdout,
         _ => return Ok(vec![]),
     };
@@ -347,7 +378,7 @@ pub fn key_line_ok(line: &str, host: &str, port: &str) -> bool {
 
 async fn target(host: &str) -> Result<(String, String), String> {
     valid_host(host)?;
-    let g = Command::new("ssh").args(["-G", "--", host]).output().await.map_err(|e| format!("can't run ssh: {e}"))?;
+    let g = cmd("ssh").args(["-G", "--", host]).output().await.map_err(|e| format!("can't run ssh: {e}"))?;
     let (h, port) = resolve_target(&String::from_utf8_lossy(&g.stdout)).ok_or("ssh -G gave no host name")?;
     valid_host(&h)?;
     Ok((h, port))
@@ -357,11 +388,11 @@ async fn target(host: &str) -> Result<(String, String), String> {
 #[tauri::command]
 async fn host_key_scan(host: String) -> Result<Vec<HostKey>, String> {
     let (h, port) = target(&host).await?;
-    let scan = Command::new("ssh-keyscan").args(["-T", "6", "-p", &port, &h]).output().await
+    let scan = cmd("ssh-keyscan").args(["-T", "6", "-p", &port, &h]).output().await
         .map_err(|e| format!("can't run ssh-keyscan: {e}"))?;
     let mut keys = vec![];
     for line in String::from_utf8_lossy(&scan.stdout).lines().filter(|l| key_line_ok(l, &h, &port)) {
-        let mut fp = Command::new("ssh-keygen").args(["-lf", "-"]).stdin(Stdio::piped()).stdout(Stdio::piped())
+        let mut fp = cmd("ssh-keygen").args(["-lf", "-"]).stdin(Stdio::piped()).stdout(Stdio::piped())
             .spawn().map_err(|e| format!("can't run ssh-keygen: {e}"))?;
         use tokio::io::AsyncWriteExt;
         fp.stdin.take().ok_or("no stdin")?.write_all(format!("{line}\n").as_bytes()).await.map_err(|e| e.to_string())?;
@@ -440,6 +471,33 @@ mod tests {
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn host_env_drops_what_apprun_points_into_the_image() {
+        // the release AppImage: fm's python3 read PYTHONHOME from the image and died (no module named 'encodings')
+        let d = "/tmp/.mount_ForemaJcPmdB";
+        let vars = [
+            ("PYTHONHOME", format!("{d}/usr/")),
+            ("PYTHONPATH", format!("{d}/usr/share/pyshared/:")),
+            ("PATH", format!("{d}/usr/bin:/usr/local/bin:/usr/bin")),
+            ("LD_LIBRARY_PATH", format!("{d}/usr/lib:/opt/mine/lib")),
+            ("NEAR", "/tmp/.mount_ForemaJcPmdB2/x".to_string()), // another image's folder, not this one
+            ("HOME", "/home/u".to_string()),
+        ]
+        .map(|(k, v)| (k.to_string(), v));
+        let mut got = host_env(vars.iter().cloned(), Some(d));
+        got.sort();
+        assert_eq!(
+            got,
+            [
+                ("LD_LIBRARY_PATH".to_string(), Some("/opt/mine/lib".to_string())),
+                ("PATH".to_string(), Some("/usr/local/bin:/usr/bin".to_string())),
+                ("PYTHONHOME".to_string(), None),
+                ("PYTHONPATH".to_string(), None),
+            ]
+        );
+        assert!(host_env(vars.into_iter(), None).is_empty(), "outside an AppImage nothing changes");
     }
 
     #[test]
