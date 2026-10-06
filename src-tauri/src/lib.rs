@@ -9,8 +9,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::ipc::Channel;
+use tauri::webview::PageLoadEvent;
 use tauri::{Manager, State};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::oneshot;
 
@@ -39,14 +40,28 @@ pub fn sh_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
-/// The command line the remote shell runs: Foreman's CLI where install.sh puts it, every argument quoted.
+const REMOTE_FM: &str = "\"${FOREMAN_HOME:-$HOME/.claude/foreman}/plugin/bin/fm\"";
+
+fn quoted(args: &[String]) -> String {
+    args.iter().map(|a| format!(" {}", sh_quote(a))).collect()
+}
+
+/// The command line the remote login shell runs: `sh -c` (so fish or csh logins work too) around Foreman's CLI where
+/// install.sh puts it, every argument quoted.
 pub fn remote_line(args: &[String]) -> String {
-    let mut line = String::from("exec \"${FOREMAN_HOME:-$HOME/.claude/foreman}/plugin/bin/fm\"");
-    for a in args {
-        line.push(' ');
-        line.push_str(&sh_quote(a));
-    }
-    line
+    format!("sh -c {}", sh_quote(&format!("exec {REMOTE_FM}{}", quoted(args))))
+}
+
+/// The same for a long-lived stream, which must end when the app lets go: ssh gives the remote command no hangup
+/// signal, so it watches its stdin (the ssh channel; saved as fd 3, since a background job's stdin is /dev/null)
+/// and stops fm when the channel closes.
+pub fn remote_stream_line(args: &[String]) -> String {
+    let inner = format!(
+        "exec 3<&0; {REMOTE_FM}{} </dev/null & p=$!; (cat <&3 >/dev/null 2>&1; kill $p 2>/dev/null) >/dev/null 2>&1 & \
+         exec 3<&-; wait $p",
+        quoted(args)
+    );
+    format!("sh -c {}", sh_quote(&inner))
 }
 
 fn fm_path() -> std::path::PathBuf {
@@ -77,8 +92,9 @@ fn ssh_opts() -> Vec<String> {
     .collect()
 }
 
-/// The fm command for a device.
-pub fn command(dev: &Device, args: &[String]) -> Result<Command, String> {
+/// The fm command for a device; `stream`: a long-lived one that ends when its stdin closes (remote only).
+pub fn command(dev: &Device, args: &[String], stream: bool) -> Result<Command, String> {
+    let remote = remote_host(dev).is_some();
     let mut c = match remote_host(dev) {
         None => {
             let mut c = Command::new(fm_path());
@@ -88,18 +104,19 @@ pub fn command(dev: &Device, args: &[String]) -> Result<Command, String> {
         Some(host) => {
             valid_host(host)?;
             let mut c = Command::new("ssh");
-            c.args(ssh_opts()).arg(host).arg("--").arg(remote_line(args));
+            let line = if stream { remote_stream_line(args) } else { remote_line(args) };
+            c.args(ssh_opts()).arg(host).arg("--").arg(line);
             c
         }
     };
-    c.stdin(Stdio::null()).kill_on_drop(true);
+    c.stdin(if stream && remote { Stdio::piped() } else { Stdio::null() }).kill_on_drop(true);
     Ok(c)
 }
 
 /// Run `fm args…` on a device and return its stdout; its stderr (or exit code) when it fails.
 #[tauri::command]
 async fn fm(device: Device, args: Vec<String>) -> Result<String, String> {
-    let mut c = command(&device, &args)?;
+    let mut c = command(&device, &args, false)?;
     c.stdout(Stdio::piped()).stderr(Stdio::piped());
     let out = tokio::time::timeout(Duration::from_secs(120), c.output())
         .await
@@ -119,6 +136,40 @@ struct Streams {
     stop: Arc<Mutex<HashMap<u32, oneshot::Sender<()>>>>,
 }
 
+impl Streams {
+    /// Stop every stream: the page that asked for them is gone (a reload starts its own).
+    fn stop_all(&self) {
+        for (_, tx) in self.stop.lock().unwrap().drain() {
+            let _ = tx.send(());
+        }
+    }
+}
+
+/// Lines longer than this are dropped (a misbehaving device can't grow the app's memory without bound).
+const MAX_LINE: usize = 8 * 1024 * 1024;
+
+/// The next line without its newline; None at the end; an over-long line comes back empty (the page ignores it).
+pub async fn next_line_capped<R: AsyncBufRead + Unpin>(r: &mut R, max: usize) -> std::io::Result<Option<String>> {
+    let mut buf = Vec::new();
+    if (&mut *r).take(max as u64).read_until(b'\n', &mut buf).await? == 0 {
+        return Ok(None);
+    }
+    if buf.last() != Some(&b'\n') && buf.len() >= max {
+        let mut rest = Vec::new();
+        loop {
+            rest.clear();
+            let n = (&mut *r).take(64 * 1024).read_until(b'\n', &mut rest).await?;
+            if n == 0 || rest.last() == Some(&b'\n') {
+                return Ok(Some(String::new()));
+            }
+        }
+    }
+    while matches!(buf.last(), Some(b'\n' | b'\r')) {
+        buf.pop();
+    }
+    Ok(Some(String::from_utf8_lossy(&buf).into_owned()))
+}
+
 /// The last line a stream sends: how it ended.
 #[derive(Serialize)]
 struct End {
@@ -134,9 +185,10 @@ async fn fm_stream(
     on_line: Channel<String>,
     streams: State<'_, Streams>,
 ) -> Result<u32, String> {
-    let mut c = command(&device, &args)?;
+    let mut c = command(&device, &args, true)?;
     c.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = c.spawn().map_err(|e| format!("can't run fm: {e}"))?;
+    let stdin = child.stdin.take(); // held open while the stream lives: closing it ends the remote side
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let mut stderr = child.stderr.take().ok_or("no stderr")?;
     let id = streams.next.fetch_add(1, Ordering::Relaxed) + 1;
@@ -149,16 +201,17 @@ async fn fm_stream(
             let _ = (&mut stderr).take(16 * 1024).read_to_end(&mut buf).await;
             String::from_utf8_lossy(&buf).trim().to_string()
         });
-        let mut lines = BufReader::new(stdout).lines();
+        let mut out = BufReader::new(stdout);
         loop {
             tokio::select! {
                 _ = &mut rx => { let _ = child.kill().await; break; }
-                line = lines.next_line() => match line {
+                line = next_line_capped(&mut out, MAX_LINE) => match line {
                     Ok(Some(l)) => if on_line.send(l).is_err() { let _ = child.kill().await; break; },
                     _ => break,
                 },
             }
         }
+        drop(stdin);
         let code = child.wait().await.ok().and_then(|s| s.code()).unwrap_or(-1);
         let error = err_task.await.unwrap_or_default();
         let _ = on_line.send(serde_json::to_string(&End { __end: code, error }).unwrap_or_default());
@@ -239,9 +292,13 @@ pub fn run() {
                 let _ = w.set_focus();
             }
         }))
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .manage(Streams::default())
+        .on_page_load(|webview, payload| {
+            if payload.event() == PageLoadEvent::Started {
+                webview.app_handle().state::<Streams>().stop_all();
+            }
+        })
         .invoke_handler(tauri::generate_handler![fm, fm_stream, fm_stream_stop, tailscale_peers, this_host, initial_view])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -268,11 +325,24 @@ mod tests {
     #[test]
     fn remote_arguments_survive_the_shell() {
         let line = remote_line(&args(&["capture", "it's $HOME `x` ; done"]));
-        let out = std::process::Command::new("sh")
-            .args(["-c", &line.replace("exec \"${FOREMAN_HOME:-$HOME/.claude/foreman}/plugin/bin/fm\"", "printf '%s|'")])
-            .output()
-            .unwrap();
+        let dir = std::env::temp_dir().join(format!("fm-desktop-q-{}", std::process::id()));
+        let fm = dir.join("plugin/bin/fm");
+        std::fs::create_dir_all(fm.parent().unwrap()).unwrap();
+        std::fs::write(&fm, "#!/bin/sh\nprintf '%s|' \"$@\"\n").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&fm, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let out = std::process::Command::new("sh").args(["-c", &line]).env("FOREMAN_HOME", &dir).output().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(String::from_utf8_lossy(&out.stdout), "capture|it's $HOME `x` ; done|");
+    }
+
+    #[tokio::test]
+    async fn long_lines_are_dropped_not_kept() {
+        let data = format!("{}\nok\n", "x".repeat(100));
+        let mut r = BufReader::new(data.as_bytes());
+        assert_eq!(next_line_capped(&mut r, 10).await.unwrap(), Some(String::new()));
+        assert_eq!(next_line_capped(&mut r, 10).await.unwrap(), Some("ok".into()));
+        assert_eq!(next_line_capped(&mut r, 10).await.unwrap(), None);
     }
 
     #[test]
@@ -301,10 +371,18 @@ mod tests {
         std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
         let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default());
         let remote = Device { host: Some("box".into()) };
-        let mut c = command(&remote, &args(&["projects", "--json"])).unwrap();
-        let out = c.env("PATH", path).stdout(Stdio::piped()).output().await.unwrap();
+        let mut c = command(&remote, &args(&["projects", "--json"]), false).unwrap();
+        let out = c.env("PATH", &path).stdout(Stdio::piped()).output().await.unwrap();
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
         assert!(String::from_utf8_lossy(&out.stdout).contains("\"projects\""));
+        // a remote stream ends when the app closes the channel (its stdin), not only when ssh is killed
+        let mut c = command(&remote, &args(&["projects", "--json", "--follow"]), true).unwrap();
+        let mut child = c.env("PATH", &path).stdout(Stdio::piped()).spawn().unwrap();
+        let mut out = BufReader::new(child.stdout.take().unwrap());
+        assert!(next_line_capped(&mut out, MAX_LINE).await.unwrap().unwrap().contains("\"projects\""));
+        drop(child.stdin.take());
+        let status = tokio::time::timeout(Duration::from_secs(10), child.wait()).await.expect("stream kept running");
+        assert!(status.is_ok());
         let _ = std::fs::remove_dir_all(dir);
         assert!(fm(Device { host: Some("-oProxyCommand=x".into()) }, vec![]).await.is_err());
     }

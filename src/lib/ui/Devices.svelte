@@ -2,7 +2,7 @@
   import { fly, slide } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { invoke } from "@tauri-apps/api/core";
-  import { app } from "$lib/app.svelte";
+  import { app, hostProblem } from "$lib/app.svelte";
   import Icon from "./Icon.svelte";
   import Bits from "./Bits.svelte";
 
@@ -10,13 +10,16 @@
   let peers = $state<Peer[]>([]);
   let name = $state("");
   let host = $state("");
+  let tried = $state(false);
+  const problem = $derived(tried ? hostProblem(host) : null);
   invoke<Peer[]>("tailscale_peers").then((p) => (peers = p)).catch(() => {});
 
   const known = (h: string) => app.devices.some((d) => d.host === h);
   function add(e?: Event, n = name, h = host) {
     e?.preventDefault();
-    if (!h.trim()) return;
-    app.addDevice(n.trim(), h.trim());
+    tried = true;
+    if (hostProblem(h) || !app.addDevice(n.trim(), h.trim())) return;
+    tried = false;
     app.toast("info", `Connecting to ${n || h}…`);
     name = host = "";
   }
@@ -58,7 +61,9 @@
       <input class="mono" placeholder="ssh host — user@box or a Tailscale name" bind:value={host} />
       <button class="go" disabled={!host.trim()}>Add</button>
     </div>
-    <div class="faint note">It needs Foreman installed (its install.sh) and key-based ssh; nothing listens on a new port.</div>
+    {#if problem}<div class="bad-note" transition:slide>{problem}</div>{/if}
+    <div class="faint note">It needs Foreman installed (its install.sh) and key-based ssh; nothing listens on a new port.
+      The first connection trusts the device's host key; a key that changes later is refused.</div>
   </form>
 
   {#if peers.length}
@@ -178,6 +183,10 @@
   }
   .note {
     font-size: 12px;
+  }
+  .bad-note {
+    font-size: 12.5px;
+    color: var(--bad);
   }
   .peers {
     display: grid;

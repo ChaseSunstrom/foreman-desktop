@@ -73,15 +73,20 @@ class App {
   connect(d: Device) {
     this.disconnect(d.id);
     this.state[d.id] = { status: "connecting", projects: [], sessions: [], agents: [] };
-    const set = (s: { ok: boolean; error?: string }) => {
+    // a device is online while any of its streams is; each stream's own error is kept (an older fm on the device
+    // may serve projects but not sessions)
+    const health: Record<string, { ok: boolean; error?: string }> = {};
+    const set = (name: string) => (s: { ok: boolean; error?: string }) => {
       const cur = this.state[d.id];
       if (!cur) return;
-      cur.status = s.ok ? "online" : "offline";
-      cur.error = s.error;
+      health[name] = s;
+      const all = Object.values(health);
+      cur.status = all.some((h) => h.ok) ? "online" : "offline";
+      cur.error = Object.entries(health).filter(([, h]) => !h.ok).map(([n, h]) => `${n}: ${h.error}`).join(" · ") || undefined;
     };
     const streams = [
-      live(d, ["projects", "--json", "--follow"], (o) => this.state[d.id] && (this.state[d.id].projects = o.projects ?? []), set),
-      live(d, ["session", "list", "--json", "--follow"], (o) => this.sessionsChanged(d, o.sessions ?? []), set),
+      live(d, ["projects", "--json", "--follow"], (o) => this.state[d.id] && (this.state[d.id].projects = o.projects ?? []), set("projects")),
+      live(d, ["session", "list", "--json", "--follow"], (o) => this.sessionsChanged(d, o.sessions ?? []), set("sessions")),
     ];
     this.streams.set(d.id, streams);
     fm<{ agents: AgentRow[] }>(d, ["session", "agents", "--json"])
@@ -112,6 +117,7 @@ class App {
   }
 
   addDevice(name: string, host: string) {
+    if (hostProblem(host)) return null;
     const d: Device = { id: `d${Date.now().toString(36)}`, name: name || host, host };
     this.devices.push(d);
     this.save();
@@ -160,12 +166,25 @@ class App {
   }
 }
 
+/** Why an ssh target can't be used, or null. The Rust side refuses the same (never an ssh option); ports and
+ * jump hosts belong in ~/.ssh/config under a Host alias. */
+export function hostProblem(h: string): string | null {
+  const v = h.trim();
+  if (!v) return "Enter an ssh host";
+  if (v.startsWith("-") || !/^[A-Za-z0-9._@-]+$/.test(v))
+    return "Use user@host or a Host alias from ~/.ssh/config (put ports and options there)";
+  return null;
+}
+
+// notification servers may render markup: remote text never becomes a link
+const plain = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "‹", ">": "›", "&": "+" })[c]!);
+
 let allowed: boolean | null = null;
 async function notify(title: string, body: string) {
   if (document.hasFocus()) return;
   try {
     if (allowed === null) allowed = (await isPermissionGranted()) || (await requestPermission()) === "granted";
-    if (allowed) sendNotification({ title, body: body.slice(0, 160) });
+    if (allowed) sendNotification({ title: plain(title), body: plain(body.slice(0, 160)) });
   } catch {}
 }
 

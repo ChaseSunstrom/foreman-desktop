@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, tick } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import { fly, fade, scale } from "svelte/transition";
   import { flip } from "svelte/animate";
   import { app } from "$lib/app.svelte";
@@ -25,26 +25,47 @@
   let pinned = true;
   let draft = $state("");
   let sending = $state(false);
+  let tailError = $state<string | null>(null);
+  let replaying = false;
+  let scrollQueued = false;
+
+  // one scroll per frame, instant while the history replays: a long session never costs a scroll per event
+  function follow() {
+    if (!pinned || scrollQueued) return;
+    scrollQueued = true;
+    requestAnimationFrame(async () => {
+      scrollQueued = false;
+      await tick();
+      scroller?.scrollTo({ top: scroller.scrollHeight, behavior: replaying ? "auto" : "smooth" });
+    });
+  }
 
   $effect(() => {
-    const d = device ? app.device(device) : null;
+    const sid = id;
+    const d = device ? untrack(() => app.device(device!)) : null; // adding another device never replays this tail
     events = [];
+    open = {};
+    tailError = null;
     stream?.stop();
     stream = null;
-    if (!d || !id) return;
+    if (!d || !sid) return;
     let first = true;
-    stream = live(d, ["session", "tail", id, "--follow"], async (e: SessionEvent) => {
+    replaying = true;
+    setTimeout(() => (replaying = false), 500);
+    stream = live(d, ["session", "tail", sid, "--follow"], (e: SessionEvent) => {
       if (first) {
         first = false;
         events = [];
+        open = {};
       }
+      tailError = null;
       events.push(e);
-      if (pinned) {
-        await tick();
-        scroller?.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
-      }
+      follow();
     }, (s) => {
-      if (!s.ok) first = true; // a reconnect replays the stream from its start
+      if (!s.ok) {
+        first = true; // a reconnect replays the stream from its start
+        tailError = s.error ?? "lost the session's stream";
+      }
     });
   });
   onDestroy(() => stream?.stop());
@@ -123,6 +144,9 @@
           {/if}
         </header>
 
+        {#if tailError}
+          <div class="tail-err" transition:fade><Icon name="alert" size={14} /> {tailError}</div>
+        {/if}
         <div class="events" bind:this={scroller} onscroll={onScroll}>
           {#each shown as e, i (i)}
             {#if e.kind === "user"}
@@ -296,6 +320,18 @@
   .status.died {
     color: var(--bad);
     background: rgba(251, 113, 133, 0.12);
+  }
+  .tail-err {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 12px 26px 0;
+    padding: 9px 13px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    color: var(--bad);
+    background: rgba(251, 113, 133, 0.08);
+    border: 1px solid rgba(251, 113, 133, 0.22);
   }
   .events {
     flex: 1;

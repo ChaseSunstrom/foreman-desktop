@@ -17,11 +17,6 @@ export async function fm<T = any>(d: Device, args: string[]): Promise<T> {
   }
 }
 
-/** Run fm on a device without parsing (commands that print plain text). */
-export function fmText(d: Device, args: string[]): Promise<string> {
-  return invoke<string>("fm", { device: target(d), args });
-}
-
 export type Stream = { stop: () => void };
 
 /** A long-lived `fm … --follow`: onLine for each JSON line, onEnd once (exit code, stderr) unless stopped. */
@@ -56,12 +51,14 @@ export function follow(
   };
 }
 
-/** follow() that reconnects with backoff when the stream ends, until stopped. */
+/** follow() that reconnects with backoff when the stream ends, until stopped, or until giveUp says the error is
+ * final (a removed session, a device whose fm lacks the command). */
 export function live(
   d: Device,
   args: string[],
   onLine: (o: any) => void,
-  onState: (s: { ok: boolean; error?: string }) => void,
+  onState: (s: { ok: boolean; error?: string; final?: boolean }) => void,
+  giveUp: (error: string) => boolean = (e) => /invalid choice|no session|was removed|not a session id/.test(e),
 ): Stream {
   let cur: Stream | null = null;
   let stopped = false;
@@ -79,7 +76,9 @@ export function live(
       },
       (code, error) => {
         if (stopped) return;
-        onState({ ok: false, error: error || `stream ended (${code})` });
+        const final = giveUp(error);
+        onState({ ok: false, error: error || `stream ended (${code})`, final });
+        if (final) return;
         timer = setTimeout(start, delay);
         delay = Math.min(delay * 2, 30000);
       },
