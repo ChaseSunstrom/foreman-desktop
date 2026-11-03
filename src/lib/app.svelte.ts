@@ -1,5 +1,5 @@
-// The app's state: devices (kept in this webview's storage) and, per device, three live lists — Foreman projects,
-// Foreman-started agent sessions and Claude Code's own sessions — each from one `fm … --follow` stream.
+// The app's state: devices (kept in this webview's storage) and, per device, three live lists — Sampo projects,
+// Sampo-started agent sessions and Claude Code's own sessions — each from one `fm … --follow` stream.
 import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { fm, live, type Device, type Stream } from "./fm";
@@ -182,7 +182,7 @@ class App {
     }
   }
 
-  /** Every session on every device, Foreman's and Claude Code's, live first, then newest. */
+  /** Every session on every device, Sampo's and Claude Code's, live first, then newest. */
   get sessions(): SessionItem[] {
     const out: SessionItem[] = [];
     for (const d of this.devices) {
@@ -203,7 +203,7 @@ class App {
     return out.sort((a, b) => Number(b.live) - Number(a.live) || b.updated - a.updated);
   }
 
-  /** Live sessions a person is in or Foreman started (headless SDK runs, like a background review, don't count). */
+  /** Live sessions a person is in or Sampo started (headless SDK runs, like a background review, don't count). */
   get running() {
     return this.sessions.filter((s) => s.live && s.kind !== "headless").length;
   }

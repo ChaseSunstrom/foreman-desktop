@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One session, Foreman's or Claude Code's: its conversation, subagents, scratchpad files and pictures, and a
+  // One session, Sampo's or Claude Code's: its conversation, subagents, scratchpad files and pictures, and a
   // composer. A Claude session is continued headlessly by its own id (forked while its terminal is still open).
   import { onDestroy, untrack } from "svelte";
   import { fade } from "svelte/transition";

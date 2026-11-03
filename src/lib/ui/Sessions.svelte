@@ -1,6 +1,6 @@
 <script lang="ts">
   // Every session on every device — terminal, Remote Control and headless Claude Code sessions, and the ones
-  // Foreman started — filtered and searched on the left, the open one on the right.
+  // Sampo started — filtered and searched on the left, the open one on the right.
   import { app } from "$lib/app.svelte";
   import { ago, base, type SessionItem } from "$lib/types";
   import Icon from "./Icon.svelte";
@@ -15,7 +15,7 @@
     { id: "all", label: "All" }, // everything but headless SDK runs, which have their own filter
     { id: "live", label: "Live" },
     { id: "terminal", label: "Terminal" },
-    { id: "foreman", label: "Foreman" },
+    { id: "foreman", label: "Sampo" },
     { id: "headless", label: "Headless" },
   ] as const;
 
@@ -78,7 +78,7 @@
       <div class="placeholder">
         <Icon name="message" size={22} />
         <div>Pick a session to read it, browse its files and pictures, or message it.</div>
-        <div class="t3 small">Claude Code sessions from every device show up here — terminal, Remote Control and headless — next to the ones Foreman started.</div>
+        <div class="t3 small">Claude Code sessions from every device show up here — terminal, Remote Control and headless — next to the ones Sampo started.</div>
         <button class="btn primary" onclick={() => (app.newSession = {})}><Icon name="plus" size={13} /> New session</button>
       </div>
     {/if}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Foreman",
+  "productName": "Sampo",
   "version": "0.1.0",
   "identifier": "dev.foreman.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Foreman",
+        "title": "Sampo",
         "width": 1320,
         "height": 860,
         "minWidth": 960,

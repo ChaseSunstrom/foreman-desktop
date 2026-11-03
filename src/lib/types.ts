@@ -1,5 +1,5 @@
 // What fm prints (--json): the shapes the app reads. The view model's full contract is foreman-ui's
-// types/index.d.ts in the Foreman repo; only the fields drawn here are listed.
+// types/index.d.ts in the Sampo repo; only the fields drawn here are listed.
 export type Step = { n: number; text: string; done: boolean; current: boolean };
 export type Criterion = { n: number; text: string; verify: string | null; checked: boolean };
 export type Plan = { interpretation: string; approach: string; steps: Step[]; criteria: Criterion[] };
@@ -46,7 +46,7 @@ export type ProjectView = {
   typical?: Record<string, number>;
 };
 /** This device's plan usage (fm projects --json, T-0346): percents, and the share of the week gone by (0–1). */
-/** fm doctor --json (T-0347): this device's Foreman health. */
+/** fm doctor --json (T-0347): this device's Sampo health. */
 export type Health = { ok: boolean; results: { name: string; status: "PASS" | "WARN" | "FAIL"; detail: string }[] };
 
 export type Usage = { five_hour?: number; seven_day?: number; week_gone?: number };
@@ -176,7 +176,7 @@ export type ProjectState = {
   deferred: string[];
   pending: string[];
 };
-/** One row of the Sessions list: a Foreman-started session or a Claude Code session, on some device. */
+/** One row of the Sessions list: a Sampo-started session or a Claude Code session, on some device. */
 export type SessionItem = {
   key: string;
   device: string;

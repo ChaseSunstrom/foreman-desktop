@@ -89,7 +89,7 @@
     <label class="field">
       <span class="label">First message</span>
       <textarea class="input" bind:this={field} rows="6" bind:value={message}
-        placeholder="What should it do? In a Foreman project, Foreman's rules apply."
+        placeholder="What should it do? In a Sampo project, Sampo's rules apply."
         onkeydown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && start(e)}></textarea>
     </label>
   </div>
