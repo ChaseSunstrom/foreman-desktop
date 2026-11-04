@@ -81,7 +81,7 @@
           {@const bad = st.health.results.filter((r) => r.status !== "PASS")}
           <div class="health">
             <span class={st.health.ok ? "okc" : "badc"}><Icon name={st.health.ok ? "check" : "x"} size={11} stroke={2.6} /></span>
-            <span class="small">{st.health.ok ? "Foreman is healthy" : "Foreman has a problem"} · {st.health.results.length - bad.length} of {st.health.results.length} checks pass</span>
+            <span class="small">{st.health.ok ? "Sampo is healthy" : "Sampo has a problem"} · {st.health.results.length - bad.length} of {st.health.results.length} checks pass</span>
             <button class="btn ghost small" onclick={() => app.checkHealth(d)}>Check again</button>
           </div>
           {#each bad as r}
@@ -113,7 +113,7 @@
         <button class="btn primary" disabled={!host.trim()}>Add</button>
       </div>
       {#if problem}<div class="err small" transition:slide>{problem}</div>{/if}
-      <div class="t3 small">It needs Foreman installed (install.sh) and key-based ssh from here. A device whose host key you haven't trusted yet asks you to compare fingerprints first.</div>
+      <div class="t3 small">It needs Sampo installed (install.sh) and key-based ssh from here. A device whose host key you haven't trusted yet asks you to compare fingerprints first.</div>
     </form>
 
     {#if peers.length}

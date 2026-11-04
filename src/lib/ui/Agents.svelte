@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Which coding agents each device has, whether Foreman's rules are wired into them, and what each is running.
+  // Which coding agents each device has, whether Sampo's rules are wired into them, and what each is running.
   import { app } from "$lib/app.svelte";
   import { fm } from "$lib/fm";
   import { AGENT } from "$lib/types";
@@ -20,7 +20,7 @@
   const running = (dev: string, agent: string) => app.sessions.filter((s) => s.device === dev && s.agent === agent && s.live).length;
   async function wire(device: string, key: string, on = true) {
     await app.act(device, ["agents", on ? "install" : "uninstall", key, "--json"],
-      on ? `Foreman's rules wired into ${AGENT[key].name}` : `Foreman taken out of ${AGENT[key].name}`);
+      on ? `Sampo's rules wired into ${AGENT[key].name}` : `Sampo taken out of ${AGENT[key].name}`);
     delete wiring[device];
   }
 </script>
@@ -29,7 +29,7 @@
   <div class="pagehead">
     <Icon name="cpu" size={15} />
     <h1>Agents</h1>
-    <span class="t3 small">Coding agents on each device, and whether Foreman's rules apply to them</span>
+    <span class="t3 small">Coding agents on each device, and whether Sampo's rules apply to them</span>
   </div>
   <div class="body">
     {#each app.devices as d (d.id)}
@@ -37,7 +37,7 @@
       <section class="panel">
         <div class="dhead"><Bits kind="dot" status={st.status} /><span class="strong">{d.name}</span><span class="t3 mono small">{d.host ?? "this machine"}</span></div>
         <table>
-          <thead><tr><th>Agent</th><th>Version</th><th>Foreman</th><th>Live</th><th></th></tr></thead>
+          <thead><tr><th>Agent</th><th>Version</th><th>Sampo</th><th>Live</th><th></th></tr></thead>
           <tbody>
             {#each Object.keys(AGENT) as key}
               {@const a = st.agents.find((x) => x.agent === key)}
@@ -54,9 +54,9 @@
                 <td class="small">{running(d.id, key) || ""}</td>
                 <td class="act">
                   {#if a?.installed && key !== "claude" && !w?.installed}
-                    <button class="btn" onclick={() => wire(d.id, key)}>Wire in Foreman</button>
+                    <button class="btn" onclick={() => wire(d.id, key)}>Wire in Sampo</button>
                   {:else if key !== "claude" && w?.installed}
-                    <button class="btn ghost" title="Take Foreman's hooks, MCP server and rules out of it" onclick={() => wire(d.id, key, false)}>Remove</button>
+                    <button class="btn ghost" title="Take Sampo's hooks, MCP server and rules out of it" onclick={() => wire(d.id, key, false)}>Remove</button>
                   {/if}
                 </td>
               </tr>

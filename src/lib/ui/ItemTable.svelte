@@ -111,7 +111,7 @@
         <button class="btn" disabled={busy[`s${open}`]} onclick={() => act(`s${open}`, ["focus", open!, "--json"], `${open} is now the active task`)}>
           <Icon name="play" size={12} /> Start</button>
         <button class="btn danger" disabled={busy[`d${open}`]}
-          onclick={() => act(`d${open}`, ["task", "drop", open!, "dropped from Foreman Desktop", "--json"], `${open} dropped`).then(() => (open = null))}>
+          onclick={() => act(`d${open}`, ["task", "drop", open!, "dropped from Sampo Desktop", "--json"], `${open} dropped`).then(() => (open = null))}>
           Drop</button>
         <button class="btn icon ghost" aria-label="Close" onclick={() => (open = null)}><Icon name="x" size={14} /></button>
       </div>

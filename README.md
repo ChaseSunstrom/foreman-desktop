@@ -1,26 +1,26 @@
-# Foreman Desktop
+# Sampo Desktop
 
 [![CI](https://github.com/ChaseSunstrom/foreman-desktop/actions/workflows/ci.yml/badge.svg)](https://github.com/ChaseSunstrom/foreman-desktop/actions/workflows/ci.yml)
 
-A desktop app for [Foreman](https://github.com/ChaseSunstrom/foreman): every project, agent session and device in one animated window. It runs on Tauri 2 (Rust) with Svelte 5.
+A desktop app for [Sampo](https://github.com/ChaseSunstrom/foreman): every project, agent session and device in one animated window. It runs on Tauri 2 (Rust) with Svelte 5.
 
 - **Home**: what's waiting on you (a yes to give, or tasks blocked on something only you can do), the tasks in progress on every device, and live and recent sessions.
-- **Projects**: the active task with its stage, steps, criteria and audits. Every queue, inbox and blocked item is listed, with search, type filters and the full brief, and you can start, drop, approve a plan or capture an idea. Drive and autonomy switches, the last gate run and recent activity are here too, all updating live. A Decisions tab lists what was decided along the way, newest first. Costly and outward decisions made without asking are flagged for your review. A Review tab shows the week's digest (what got done, lessons, decisions to review, blocked work) and the friction since Foreman's last self-improvement pass.
-- **Sessions**: every Claude Code session on every device (terminal, Remote Control, headless) next to the ones Foreman started. Each one has:
+- **Projects**: the active task with its stage, steps, criteria and audits. Every queue, inbox and blocked item is listed, with search, type filters and the full brief, and you can start, drop, approve a plan or capture an idea. Drive and autonomy switches, the last gate run and recent activity are here too, all updating live. A Decisions tab lists what was decided along the way, newest first. Costly and outward decisions made without asking are flagged for your review. A Review tab shows the week's digest (what got done, lessons, decisions to review, blocked work) and the friction since Sampo's last self-improvement pass.
+- **Sessions**: every Claude Code session on every device (terminal, Remote Control, headless) next to the ones Sampo started. Each one has:
   - its conversation (Markdown, tool calls with their output, pasted and tool-returned images);
   - its subagents and their transcripts;
   - its scratchpad files and a picture gallery.
 
-  Message any session: Foreman sessions take the next turn; a Claude session is continued headlessly by its own id, as a fork while its terminal is still open.
+  Message any session: Sampo sessions take the next turn; a Claude session is continued headlessly by its own id, as a fork while its terminal is still open.
 - **Remote control**: the `claude remote-control` units on each device (`fm serve`). Serve a project, stop a unit, or see why one died.
-- **Agents** and **Devices**: which agents each device has, whether Foreman's guard, MCP server and rules are wired into them (`fm agents`, with Wire in and Remove), your tailnet's machines, and an explicit fingerprint check before any device is trusted.
-- **Usage**: each device's 5-hour and weekly plan usage in the sidebar, with an even-pace mark for the week. A bar turns amber when usage runs ahead of pace, which is the point where Foreman holds subagents back.
+- **Agents** and **Devices**: which agents each device has, whether Sampo's guard, MCP server and rules are wired into them (`fm agents`, with Wire in and Remove), your tailnet's machines, and an explicit fingerprint check before any device is trusted.
+- **Usage**: each device's 5-hour and weekly plan usage in the sidebar, with an even-pace mark for the week. A bar turns amber when usage runs ahead of pace, which is the point where Sampo holds subagents back.
 - **Health**: each device's `fm doctor` result. A mark in the sidebar shows when a check fails, and the Devices page lists every check that doesn't pass, with Check again.
 - **Ctrl+K** jumps to any project, session, page or action; **Ctrl+N** starts a session; **Ctrl+Shift+C** captures an idea, a bug or a request into any project's inbox, with its kind and size.
 
 ## How it works
 
-The app is a client of Foreman's own CLI. It never talks to a daemon:
+The app is a client of Sampo's own CLI. It never talks to a daemon:
 
 - On this machine it runs `~/.claude/foreman/plugin/bin/fm … --json` directly. On other devices it runs the same command over `ssh`, with one shared connection per host.
 - It keeps three live streams per device (`fm projects --follow`, `fm session list --follow`, `fm claude list --follow`), plus one for the project or session you have open.
@@ -34,7 +34,7 @@ Download the AppImage, deb or rpm (Linux) or the universal dmg (macOS) from [Rel
 
 ## Requirements
 
-- Every device needs Foreman installed with its `install.sh`; the app needs `fm projects`, `fm session` and `--follow`, from Foreman's T-0322 and T-0323 onwards.
+- Every device needs Sampo installed with its `install.sh`; the app needs `fm projects`, `fm session` and `--follow`, from Sampo's T-0322 and T-0323 onwards.
 - Every other device needs key-based ssh from this machine. Tailscale SSH (`tailscale up --ssh` on that device) is the easiest way to get it.
 - To build: Rust (rustup), bun, and on Linux `webkit2gtk-4.1`.
 
@@ -49,7 +49,7 @@ cd src-tauri && cargo test                # the transport: quoting, host checks,
 
 Optional environment variables:
 
-- `FOREMAN_HOME`: where Foreman lives, if not `~/.claude/foreman`.
+- `FOREMAN_HOME`: where Sampo lives, if not `~/.claude/foreman`.
 - `FOREMAN_DESKTOP_VIEW=sessions|remote|agents|devices|new|palette|capture|project:<slug>[:tab]|session:<id>|claude:<id>`: the page to open first.
 
 On Wayland with NVIDIA, the app sets `__NV_DISABLE_EXPLICIT_SYNC=1` itself, which is the fix Tauri recommends for WebKitGTK's "Error 71".

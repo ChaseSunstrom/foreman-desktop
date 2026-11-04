@@ -25,7 +25,7 @@
   <div class="brand">
     <Logo size={24} />
     <div class="ellipsis">
-      <div class="name">Foreman</div>
+      <div class="name">Sampo</div>
       <div class="sub">{online}/{app.devices.length} devices online</div>
     </div>
   </div>

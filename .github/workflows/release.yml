@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag like v0.2.0 to build Linux and macOS bundles into a GitHub release.
-# (The app talks to Foreman, which runs on Linux and macOS; on Windows it lives in WSL.)
+# (The app talks to Sampo, which runs on Linux and macOS; on Windows it lives in WSL.)
 on:
   push:
     tags: ['v*']
@@ -41,7 +41,7 @@ jobs:
         with:
           tauriScript: bun run tauri
           tagName: ${{ github.ref_name }}
-          releaseName: Foreman Desktop ${{ github.ref_name }}
-          releaseBody: Linux (AppImage, deb, rpm) and macOS (universal dmg). Needs Foreman on each device you manage.
+          releaseName: Sampo Desktop ${{ github.ref_name }}
+          releaseBody: Linux (AppImage, deb, rpm) and macOS (universal dmg). Needs Sampo on each device you manage.
           releaseDraft: false
           args: ${{ matrix.args }}

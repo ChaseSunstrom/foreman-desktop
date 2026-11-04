@@ -1,4 +1,4 @@
-//! Foreman Desktop's core: the app is a client of Foreman's CLI. Every device runs `fm … --json`, this machine
+//! Sampo Desktop's core: the app is a client of Sampo's CLI. Every device runs `fm … --json`, this machine
 //! directly and others over ssh (one shared connection per host), and long-lived `--follow` commands stream
 //! JSON lines to the webview over a Channel. No daemon and no new network service: ssh keys and Tailscale ACLs
 //! already decide who may reach a device.
@@ -46,7 +46,7 @@ fn quoted(args: &[String]) -> String {
     args.iter().map(|a| format!(" {}", sh_quote(a))).collect()
 }
 
-/// The command line the remote login shell runs: `sh -c` (so fish or csh logins work too) around Foreman's CLI where
+/// The command line the remote login shell runs: `sh -c` (so fish or csh logins work too) around Sampo's CLI where
 /// install.sh puts it, every argument quoted.
 pub fn remote_line(args: &[String]) -> String {
     format!("sh -c {}", sh_quote(&format!("exec {REMOTE_FM}{}", quoted(args))))
@@ -596,7 +596,7 @@ mod tests {
     #[tokio::test]
     async fn fm_runs_locally_and_over_ssh() {
         if !fm_path().exists() {
-            eprintln!("Foreman isn't installed here: skipped");
+            eprintln!("Sampo isn't installed here: skipped");
             return;
         }
         let local = fm(Device::default(), args(&["projects", "--json"])).await.unwrap();

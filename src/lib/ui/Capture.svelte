@@ -67,7 +67,7 @@
     <div class="field">
       <span class="label">Size</span>
       <div class="segs">
-        {#each [["", "Let Foreman guess"], ["S", "Small"], ["M", "Medium"], ["L", "Large"]] as [t, label]}
+        {#each [["", "Let Sampo guess"], ["S", "Small"], ["M", "Medium"], ["L", "Large"]] as [t, label]}
           <button type="button" class:on={tier === t} onclick={() => (tier = t)}>{label}</button>
         {/each}
         <button type="button" class:on={urgent} onclick={() => (urgent = !urgent)} title="goes first in the queue">Urgent</button>
@@ -80,7 +80,7 @@
     </label>
   </div>
   <div class="foot">
-    <span class="t3 small">fm capture on {projects.find((p) => p.key === target)?.dev ?? "the device"}; Foreman plans it when it comes up.</span>
+    <span class="t3 small">fm capture on {projects.find((p) => p.key === target)?.dev ?? "the device"}; Sampo plans it when it comes up.</span>
     <button class="btn primary" disabled={busy || !text.trim() || !target}>
       {#if busy}<Bits kind="spinner" size={11} />{:else}<Icon name="plus" size={12} />{/if} Capture <span class="kbd dark">Ctrl ↵</span></button>
   </div>
