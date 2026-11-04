@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
-// @ts-expect-error type error without @types/node package
+// @ts-ignore: no @types/node in the lockfile; a local install may have it, so expect-error would fail there
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 
